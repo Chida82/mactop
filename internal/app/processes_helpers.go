@@ -28,8 +28,8 @@ func resolveProcessThemeColor() (string, string) {
 		// Check if the theme is a hex color
 		if IsHexColor(currentConfig.Theme) {
 			themeColorStr = currentConfig.Theme
-		} else if IsCatppuccinTheme(currentConfig.Theme) {
-			themeColorStr = GetCatppuccinHex(currentConfig.Theme, "Primary")
+		} else if IsPaletteTheme(currentConfig.Theme) {
+			themeColorStr = GetPaletteHex(currentConfig.Theme, "Primary")
 		} else if IsLightMode && currentConfig.Theme == "white" {
 			themeColorStr = "black"
 		} else if currentConfig.Theme == "1977" {
@@ -58,8 +58,8 @@ func resolveSelectedHeaderFg(themeColorStr string) string {
 	if IsLightMode {
 		return "#020202"
 	}
-	if IsCatppuccinTheme(currentConfig.Theme) {
-		return GetCatppuccinHex(currentConfig.Theme, "Base")
+	if IsPaletteTheme(currentConfig.Theme) {
+		return GetPaletteHex(currentConfig.Theme, "Base")
 	}
 	if IsHexColor(themeColorStr) {
 		if IsLightHexColor(themeColorStr) {

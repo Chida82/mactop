@@ -640,7 +640,7 @@ func updateKillModal() {
 		bg = ui.ColorBlack
 	}
 
-	if IsCatppuccinTheme(currentConfig.Theme) {
+	if IsPaletteTheme(currentConfig.Theme) {
 		primaryColor = processList.TitleStyle.Fg
 	} else if IsLightMode && currentConfig.Theme == "white" {
 		primaryColor = ui.ColorBlack
