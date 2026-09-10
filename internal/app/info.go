@@ -282,8 +282,8 @@ func getThemeColor() string {
 	if currentConfig.Theme != "" {
 		if currentConfig.Theme == "1977" {
 			themeColor = "green"
-		} else if IsCatppuccinTheme(currentConfig.Theme) {
-			themeColor = GetCatppuccinHex(currentConfig.Theme, "Primary")
+		} else if IsPaletteTheme(currentConfig.Theme) {
+			themeColor = GetPaletteHex(currentConfig.Theme, "Primary")
 		} else {
 			// Use resolveThemeColorString for all colors (handles hex codes)
 			themeColor = resolveThemeColorString(currentConfig.Theme)

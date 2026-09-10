@@ -123,10 +123,20 @@ Example with flags:
 mactop --interval 1000 --foreground green --lang ja
 ```
 
+Built-in Themes:
+
+```bash
+# Dracula
+mactop --foreground dracula --bg dracula-base
+
+# Catppuccin
+mactop --foreground mocha --bg mocha-base
+```
+
 Custom Hex Colors:
 
 ```bash
-# Use Dracula theme colors
+# Use Dracula PRO theme colors
 mactop --foreground "#9580FF" --bg "#22212C"
 ```
 
@@ -150,8 +160,8 @@ mactop --headless --format toon
 - `--count`: Number of samples to collect in headless mode (0 = infinite).
 - `--pretty`: Pretty print JSON output in headless mode.
 - `--interval` or `-i`: Set the update interval in milliseconds. Default is 1000.
-- `--foreground`: Set the UI foreground color. Accepts named colors (green, red, blue, etc.) or hex colors (#9580FF).
-- `--bg` or `--background`: Set the UI background color. Accepts named colors (mocha-base, etc.) or hex colors (#22212C).
+- `--foreground`: Set the UI foreground color. Accepts named colors (green, red, blue, etc.), full palette themes (dracula, mocha, macchiato, frappe) or hex colors (#9580FF).
+- `--bg` or `--background`: Set the UI background color. Accepts named colors (dracula-base, mocha-base, etc.) or hex colors (#22212C).
 - `--prometheus` or `-p`: Set and enable the local Prometheus metrics server on the given port. Default is disabled. (e.g. -p 2112 to enable Prometheus metrics on port 2112)
 - `--unit-network`: Network unit: auto, byte, kb, mb, gb (default: auto)
 - `--unit-disk`: Disk unit: auto, byte, kb, mb, gb (default: auto)
