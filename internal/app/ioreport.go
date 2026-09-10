@@ -109,6 +109,7 @@ int setFanForceTest(int enabled);
 int setFanMode(int fanIndex, int mode);
 int setFanTarget(int fanIndex, int rpm);
 int resetFansToAuto();
+int getFanList(fan_info_t *fans, int maxFans);
 
 // Wi-Fi link info structure (defined in ioreport.m)
 typedef struct {
@@ -362,6 +363,27 @@ func ResetFansToAuto() error {
 		return fmt.Errorf("failed to reset fans to auto")
 	}
 	return nil
+}
+
+// GetFanList reads current fan state directly from the SMC. Unlike
+// sampleSocMetrics it does not require initSocMetrics(), so the one-shot
+// headless fan commands can use it without the full IOReport pipeline.
+func GetFanList() []FanInfo {
+	var cf [8]C.fan_info_t
+	n := int(C.getFanList(&cf[0], C.int(len(cf))))
+	fans := make([]FanInfo, 0, n)
+	for i := 0; i < n && i < len(cf); i++ {
+		fans = append(fans, FanInfo{
+			ID:        int(cf[i].id),
+			Name:      C.GoString(&cf[i].name[0]),
+			ActualRPM: int(cf[i].actualRPM),
+			MinRPM:    int(cf[i].minRPM),
+			MaxRPM:    int(cf[i].maxRPM),
+			TargetRPM: int(cf[i].targetRPM),
+			Mode:      int(cf[i].mode),
+		})
+	}
+	return fans
 }
 
 // DebugIOReport prints all available IOReport channels and groups to stdout

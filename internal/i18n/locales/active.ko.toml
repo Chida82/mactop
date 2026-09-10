@@ -281,6 +281,10 @@ CLI_HelpText = """
       --overlay-sections  표시할 섹션을 쉼표로 구분해 지정 (예: cpu,gpu,memory,power)
       --overlay-opacity   오버레이 창 투명도, 0.15-1.0 (기본값: 0.88)
       --fan-control       대화형 팬 제어 활성화 (SMC에 기록)
+      --fan-set <value>   팬 속도를 설정하고 종료: RPM, 퍼센트 (60%), min, max 또는 auto (sudo 필요)
+      --fan-id <n>        --fan-set을 단일 팬 ID에 적용 (기본값: 모든 팬)
+      --fan-auto          팬 자동 제어를 복원하고 종료 (sudo 필요)
+      --fan-status        팬 상태를 JSON으로 출력하고 종료
       --dump-temps        진단: 모든 원시 SMC 온도 키를 출력하고 종료
       --dump-debug        진단: IOReport/HID/SMC/NVMe 디버그 정보를 출력하고 종료
 
@@ -330,6 +334,15 @@ Fan_ControlActive = "[⚠ 팬 제어 활성화됨](fg:red,mod:bold)  [+/-](fg:%s
 Fan_ReadOnly = "[읽기 전용](fg:%s)  쓰기를 허용하려면 --fan-control 사용  |  [l](fg:%s,mod:bold) 레이아웃  [F](fg:%s,mod:bold) 팬 보기 종료"
 Fan_NeedsRoot = "[⚠ 팬 제어에는 root 권한이 필요합니다 — 재실행: sudo mactop --fan-control](fg:red,mod:bold)"
 Fan_WriteFailed = "  [⚠ 마지막 쓰기가 적용되지 않음 (OS 거부)](fg:red,mod:bold)"
+FanCLI_NeedsRoot = "오류: 팬 제어 쓰기에는 root가 필요합니다 — 실행: sudo mactop %s"
+FanCLI_WriteFailed = "오류: 팬 제어 쓰기 실패: %v"
+FanCLI_InvalidValue = "오류: 잘못된 --fan-set 값 '%s' — RPM 숫자, 60%% 같은 퍼센트, min, max 또는 auto를 사용하세요"
+FanCLI_UnknownFan = "오류: ID %d인 팬이 없습니다 (감지된 팬: %d개)"
+FanCLI_NoMaxRPM = "오류: 팬이 최대 RPM을 보고하지 않습니다 — 퍼센트/max 대신 절대 RPM 값을 사용하세요"
+FanCLI_FanPinned = "팬 %d을(를) %d RPM으로 고정했습니다 (수동 모드)"
+FanCLI_AutoRestored = "모든 팬이 자동 제어로 복원되었습니다"
+FanCLI_ManualWarning = "⚠ mactop 종료 후에도 팬은 수동 모드로 유지됩니다 — 자동 제어 복원: sudo mactop --fan-auto"
+FanCLI_VerifyFailed = "경고: SMC가 쓰기를 수락했지만 팬 상태가 변경되지 않았습니다 — OS가 재정의했을 수 있습니다"
 
 Metrics_PowerSparklineGroup = "%.2f W 총합 (최대: %.2f W)"
 Metrics_PowerSparklineTitle = "평균 %.2f W | %s"

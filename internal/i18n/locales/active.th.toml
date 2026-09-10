@@ -281,6 +281,10 @@ CLI_HelpText = """
       --overlay-sections  ส่วนที่มองเห็นคั่นด้วยจุลภาค (เช่น cpu,gpu,memory,power)
       --overlay-opacity   ความทึบของหน้าต่าง overlay, 0.15-1.0 (ค่าเริ่มต้น: 0.88)
       --fan-control       เปิดใช้งานการควบคุมพัดลมแบบโต้ตอบ (เขียนไปที่ SMC)
+      --fan-set <value>   ตั้งความเร็วพัดลมแล้วออก: RPM, เปอร์เซ็นต์ (60%), min, max หรือ auto (ต้องใช้ sudo)
+      --fan-id <n>        ใช้ --fan-set กับพัดลม ID เดียว (ค่าเริ่มต้น: พัดลมทั้งหมด)
+      --fan-auto          กู้คืนการควบคุมพัดลมอัตโนมัติแล้วออก (ต้องใช้ sudo)
+      --fan-status        พิมพ์สถานะพัดลมเป็น JSON แล้วออก
       --dump-temps        การวินิจฉัย: แสดงทุกคีย์อุณหภูมิ SMC ดิบและออก
       --dump-debug        การวินิจฉัย: แสดงข้อมูลดีบัก IOReport/HID/SMC/NVMe และออก
 
@@ -330,6 +334,15 @@ Fan_ControlActive = "[⚠ การควบคุมพัดลมทำงา
 Fan_ReadOnly = "[อ่านอย่างเดียว](fg:%s)  ใช้ --fan-control เพื่อเขียน  |  [l](fg:%s,mod:bold) เลย์เอาท์  [F](fg:%s,mod:bold) ปิดมุมมองพัดลม"
 Fan_NeedsRoot = "[⚠ การควบคุมพัดลมต้องใช้ root — เริ่มใหม่ด้วย: sudo mactop --fan-control](fg:red,mod:bold)"
 Fan_WriteFailed = "  [⚠ การเขียนครั้งล่าสุดไม่มีผล (ระบบปฏิเสธ)](fg:red,mod:bold)"
+FanCLI_NeedsRoot = "ข้อผิดพลาด: การเขียนควบคุมพัดลมต้องใช้ root — รัน: sudo mactop %s"
+FanCLI_WriteFailed = "ข้อผิดพลาด: การเขียนควบคุมพัดลมล้มเหลว: %v"
+FanCLI_InvalidValue = "ข้อผิดพลาด: ค่า --fan-set ไม่ถูกต้อง '%s' — ใช้ตัวเลข RPM, เปอร์เซ็นต์เช่น 60%%, min, max หรือ auto"
+FanCLI_UnknownFan = "ข้อผิดพลาด: ไม่มีพัดลมที่มี ID %d (พบพัดลม %d ตัว)"
+FanCLI_NoMaxRPM = "ข้อผิดพลาด: พัดลมไม่รายงาน RPM สูงสุด — ใช้ค่า RPM สัมบูรณ์แทนเปอร์เซ็นต์/max"
+FanCLI_FanPinned = "พัดลม %d ถูกตรึงไว้ที่ %d RPM (โหมดกำหนดเอง)"
+FanCLI_AutoRestored = "พัดลมทั้งหมดกลับสู่การควบคุมอัตโนมัติแล้ว"
+FanCLI_ManualWarning = "⚠ พัดลมจะยังคงอยู่ในโหมดกำหนดเองหลังจาก mactop ปิด — กู้คืนการควบคุมอัตโนมัติด้วย: sudo mactop --fan-auto"
+FanCLI_VerifyFailed = "คำเตือน: SMC ยอมรับการเขียนแต่สถานะพัดลมไม่เปลี่ยน — ระบบปฏิบัติการอาจแทนที่ค่านั้น"
 
 Metrics_PowerSparklineGroup = "%.2f W รวม (สูงสุด: %.2f W)"
 Metrics_PowerSparklineTitle = "เฉลี่ย %.2f W | %s"

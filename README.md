@@ -26,7 +26,7 @@
 - **DRAM Bandwidth Monitoring**: Real-time DRAM read/write bandwidth (GB/s) — uses auto-calibrated power-based estimation on M5+ chips (no sudo required)
 - **Comprehensive Temperature Sensors**: All available SMC temperature sensors (CPU Die, GPU, Memory, SSD, Airflow, and more) with human-readable labels
 - **Fan Monitoring**: Real-time fan RPM, target speed, mode (Auto/Manual), and visual RPM bars
-- **Fan Speed Control**: Optional interactive fan speed control via `--fan-control` flag (writes to SMC)
+- **Fan Speed Control**: Optional interactive fan speed control via `--fan-control` flag (writes to SMC), plus headless one-shot commands (`--fan-set`, `--fan-auto`, `--fan-status`) for scripts, cron, and SSH
 - Detailed native metrics for CPU cores (E-cores, P-cores, and S-cores on M5+) via Apple's Mach Kernel API
 - Memory usage and swap information
 - Network usage information (upload/download speeds)
@@ -168,6 +168,10 @@ mactop --headless --format toon
 - `--unit-temp`: Temperature unit: celsius, fahrenheit (default: celsius)
 - `--lang`: Language override (e.g., `en`, `es`, `ja`, `zh`). Auto-detects system language if not set. Priority: CLI flag > `MACTOP_LANG` env var > `config.json` > system language.
 - `--fan-control`: Enable interactive fan speed control (**⚠️ writes to SMC** — use with caution). **Requires root**: writing SMC fan keys is privileged, so you must run `sudo mactop --fan-control`. Without root every fan write is silently rejected (`kIOReturnNotPrivileged`) and the controls appear to do nothing.
+- `--fan-set <value>`: Headless one-shot fan control (**⚠️ writes to SMC**, requires `sudo`): pin the fans to a target and exit. Accepts an absolute RPM (`3000`), a percent of each fan's min–max range (`60%`), `min`, `max`, or `auto`. See [Headless Fan Control](#headless-fan-control).
+- `--fan-id <n>`: Apply `--fan-set` to a single fan ID instead of all fans.
+- `--fan-auto`: Restore all fans to automatic control and exit (requires `sudo`).
+- `--fan-status`: Print current fan state as JSON to stdout and exit (no root required).
 - `--menubar`: Run as a macOS menu bar status item alongside the TUI.
 - `--overlay`: Run as a floating overlay HUD window with FPS metrics. (**Requires Screen Recording permission** — see [Permissions](#permissions) below)
 - `--dump-fps`: Diagnostic tool that dumps display info, screen recording permission status, and tests CGDisplayStream at multiple output sizes. Useful for troubleshooting FPS display issues.
@@ -369,6 +373,30 @@ Use the following keys to interact with the application while its running:
 - `0`: Set all fans to minimum speed
 - `9`: Set all fans to maximum speed
 - `R` (Shift+r): Reset all fans to automatic control
+
+## Headless Fan Control
+
+Fan control also works without the TUI — from scripts, cron jobs, or over SSH:
+
+```bash
+# Read fan state (no root needed) — JSON on stdout
+mactop --fan-status
+
+# Pin all fans to 3000 RPM (or a percent of each fan's min–max range, or min/max)
+sudo mactop --fan-set 3000
+sudo mactop --fan-set 60%
+sudo mactop --fan-set max
+
+# Pin only fan 1
+sudo mactop --fan-set 2500 --fan-id 1
+
+# Restore automatic fan control
+sudo mactop --fan-auto        # (equivalent: sudo mactop --fan-set auto)
+```
+
+Each command performs its SMC writes, prints the resulting fan state as JSON to stdout (human-readable messages go to stderr; `--pretty` is honored), and exits — exit code 0 on success, 1 on failure. After writing, mactop reads the fan state back and fails with a warning if the OS silently rejected the write.
+
+> **⚠️ Unlike the interactive TUI, `--fan-set` intentionally leaves the fans pinned in manual mode after mactop exits** — that's what makes it usable headlessly. Nothing will restore automatic control until you run `sudo mactop --fan-auto` (or reboot). Pinning fans below their automatic speed under load can cause thermal throttling; the macOS thermal governor may also override manual targets on recent macOS versions.
 
 ## Example Theme (Green) Screenshot (mactop -c green) on Advanced layout (Hit "l" key to toggle)
 

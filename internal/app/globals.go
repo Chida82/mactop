@@ -128,6 +128,10 @@ var (
 	cliLanguage      string  // Language override flag
 	resolvedLanguage string  // Final resolved language (CLI > env > config > system)
 	fanControl       bool    // Enable interactive fan speed control (requires --fan-control flag)
+	fanSetSpec       string  // --fan-set: one-shot headless fan target (RPM, NN%, min, max, auto)
+	fanSetID         int     // --fan-id: fan targeted by --fan-set (-1 = all fans)
+	fanAutoFlag      bool    // --fan-auto: one-shot restore of automatic fan control
+	fanStatusFlag    bool    // --fan-status: one-shot fan state JSON dump
 	overlay          bool    // Show floating overlay HUD window
 	overlayWorker    bool    // Hidden: run as overlay worker process
 	overlaySections  string  // Comma-separated visible sections for overlay

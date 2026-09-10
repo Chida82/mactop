@@ -269,8 +269,56 @@ kern_return_t SMCSetFloat(io_connect_t conn, const char *key, float value) {
       return kIOReturnBadArgument;
     }
     bytes[0] = (char)(unsigned char)value;
+  } else if (SMCIsType(keyInfo.dataType, "ui16") && keyInfo.dataSize >= 2) {
+    if (value < 0.0f || value > 65535.0f) {
+      return kIOReturnBadArgument;
+    }
+    unsigned int raw = (unsigned int)value;
+    bytes[0] = (char)((raw >> 8) & 0xff);
+    bytes[1] = (char)(raw & 0xff);
+  } else if (SMCIsType(keyInfo.dataType, "ui32") && keyInfo.dataSize >= 4) {
+    if (value < 0.0f || value > 4294967295.0f) {
+      return kIOReturnBadArgument;
+    }
+    unsigned int raw = (unsigned int)value;
+    bytes[0] = (char)((raw >> 24) & 0xff);
+    bytes[1] = (char)((raw >> 16) & 0xff);
+    bytes[2] = (char)((raw >> 8) & 0xff);
+    bytes[3] = (char)(raw & 0xff);
   } else {
-    return kIOReturnUnsupported;
+    // Fixed-point "fpXY"/"spXY": big-endian 16-bit raw scaled by 2^frac,
+    // mirroring the decode in SMCGetFloatValue. Intel-era fan keys (F0Tg,
+    // F0Mn, ...) are "fpe2" — without this branch those writes were
+    // rejected as unsupported and fan control silently did nothing.
+    unsigned int type = keyInfo.dataType;
+    unsigned char c0 = (type >> 24) & 0xff;
+    unsigned char c1 = (type >> 16) & 0xff;
+    unsigned char c3 = type & 0xff;
+    int frac = -1;
+    if (c3 >= '0' && c3 <= '9')
+      frac = c3 - '0';
+    else if (c3 >= 'a' && c3 <= 'f')
+      frac = c3 - 'a' + 10;
+    else if (c3 >= 'A' && c3 <= 'F')
+      frac = c3 - 'A' + 10;
+    if (c1 != 'p' || (c0 != 'f' && c0 != 's') || frac < 0 || frac > 16 ||
+        keyInfo.dataSize < 2) {
+      return kIOReturnUnsupported;
+    }
+    double scaled = (double)value * (double)(1u << frac);
+    if (c0 == 's') {
+      if (scaled < -32768.0 || scaled > 32767.0)
+        return kIOReturnBadArgument;
+      short raw = (short)scaled;
+      bytes[0] = (char)(((unsigned short)raw >> 8) & 0xff);
+      bytes[1] = (char)((unsigned short)raw & 0xff);
+    } else {
+      if (scaled < 0.0 || scaled > 65535.0)
+        return kIOReturnBadArgument;
+      unsigned int raw = (unsigned int)scaled;
+      bytes[0] = (char)((raw >> 8) & 0xff);
+      bytes[1] = (char)(raw & 0xff);
+    }
   }
 
   return SMCWriteKey(conn, key, keyInfo.dataType, bytes, keyInfo.dataSize);

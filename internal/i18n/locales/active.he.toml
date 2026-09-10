@@ -281,6 +281,10 @@ CLI_HelpText = """
       --overlay-sections  אזורים נראים מופרדים בפסיקים (לדוגמה cpu,gpu,memory,power)
       --overlay-opacity   שקיפות חלון overlay, 0.15-1.0 (ברירת מחדל: 0.88)
       --fan-control       הפעל בקרת מאווררים אינטראקטיבית (כותב ל-SMC)
+      --fan-set <value>   קביעת מהירות מאווררים ויציאה: RPM, אחוז (60%), min, max או auto (דורש sudo)
+      --fan-id <n>        החלת --fan-set על מזהה מאוורר יחיד (ברירת מחדל: כל המאווררים)
+      --fan-auto          שחזור בקרת מאווררים אוטומטית ויציאה (דורש sudo)
+      --fan-status        הדפסת מצב המאווררים כ-JSON ויציאה
       --dump-temps        אבחון: הצג את כל מפתחות טמפרטורת SMC וצא
       --dump-debug        אבחון: הצג מידע ניפוי IOReport/HID/SMC/NVMe וצא
 
@@ -330,6 +334,15 @@ Fan_ControlActive = "[⚠ בקרת מאווררים פעילה](fg:red,mod:bold)
 Fan_ReadOnly = "[קריאה בלבד](fg:%s)  השתמש ב---fan-control לכתיבה  |  [l](fg:%s,mod:bold) פריסה  [F](fg:%s,mod:bold) סגור תצוגת מאווררים"
 Fan_NeedsRoot = "[⚠ בקרת המאווררים דורשת root — הפעל מחדש עם: sudo mactop --fan-control](fg:red,mod:bold)"
 Fan_WriteFailed = "  [⚠ הכתיבה האחרונה לא נכנסה לתוקף (נדחתה על ידי מערכת ההפעלה)](fg:red,mod:bold)"
+FanCLI_NeedsRoot = "שגיאה: כתיבות בקרת מאווררים דורשות root — הרץ: sudo mactop %s"
+FanCLI_WriteFailed = "שגיאה: כתיבת בקרת מאווררים נכשלה: %v"
+FanCLI_InvalidValue = "שגיאה: ערך --fan-set לא חוקי '%s' — השתמש במספר RPM, אחוז כמו 60%%, min, max או auto"
+FanCLI_UnknownFan = "שגיאה: אין מאוורר עם מזהה %d (זוהו %d מאווררים)"
+FanCLI_NoMaxRPM = "שגיאה: המאוורר אינו מדווח על RPM מקסימלי — השתמש בערך RPM מוחלט במקום אחוז/max"
+FanCLI_FanPinned = "מאוורר %d קובע ל-%d RPM (מצב ידני)"
+FanCLI_AutoRestored = "כל המאווררים הוחזרו לבקרה אוטומטית"
+FanCLI_ManualWarning = "⚠ המאווררים נשארים במצב ידני לאחר יציאת mactop — שחזר בקרה אוטומטית עם: sudo mactop --fan-auto"
+FanCLI_VerifyFailed = "אזהרה: ה-SMC קיבל את הכתיבה אך מצב המאוורר לא השתנה — ייתכן שמערכת ההפעלה עקפה אותה"
 
 Metrics_PowerSparklineGroup = "%.2f W סה״כ (מקס: %.2f W)"
 Metrics_PowerSparklineTitle = "ממוצע %.2f W | %s"

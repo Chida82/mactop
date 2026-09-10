@@ -649,6 +649,10 @@ func runAlternateMode() bool {
 		startOverlayWorker()
 		return true
 	}
+	if fanCLIRequested() {
+		runFanCLI()
+		return true
+	}
 	if headless {
 		runHeadless(headlessCount)
 		return true
@@ -2333,6 +2337,10 @@ func parseCommandLineFlags() {
 	flag.Float64Var(&overlayOpacity, "overlay-opacity", 0.88, "Overlay window opacity (0.15-1.0)")
 	flag.IntVar(&filterPID, "pid", 0, "Monitor a specific process by PID")
 	flag.BoolVar(&fanControl, "fan-control", false, "Enable interactive fan speed control (⚠️  writes to SMC)")
+	flag.StringVar(&fanSetSpec, "fan-set", "", "Set fan speed headlessly and exit: RPM, percent (e.g. 60%), min, max, or auto (requires root, ⚠️  writes to SMC)")
+	flag.IntVar(&fanSetID, "fan-id", -1, "Apply --fan-set to a single fan ID (default: all fans)")
+	flag.BoolVar(&fanAutoFlag, "fan-auto", false, "Restore all fans to automatic control and exit (requires root)")
+	flag.BoolVar(&fanStatusFlag, "fan-status", false, "Print current fan status as JSON and exit")
 	flag.BoolVar(&dumpTemps, "dump-temps", false, "Diagnostic: dump all raw SMC temperature keys and exit")
 	flag.BoolVar(&dumpDebug, "dump-debug", false, "Diagnostic: dump IOReport/HID/SMC/NVMe debug info and exit")
 	flag.BoolVar(&dumpFPS, "dump-fps", false, "Diagnostic: dump display info and test CGDisplayStream FPS at multiple sizes")

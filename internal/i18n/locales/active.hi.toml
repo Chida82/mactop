@@ -281,6 +281,10 @@ CLI_HelpText = """
       --overlay-sections  अल्पविराम से अलग दिखाई देने वाले अनुभाग (जैसे cpu,gpu,memory,power)
       --overlay-opacity   Overlay विंडो अपारदर्शिता, 0.15-1.0 (डिफ़ॉल्ट: 0.88)
       --fan-control       इंटरैक्टिव पंखा नियंत्रण सक्षम करें (SMC में लिखता है)
+      --fan-set <value>   फैन गति सेट करें और बाहर निकलें: RPM, प्रतिशत (60%), min, max या auto (sudo आवश्यक)
+      --fan-id <n>        --fan-set को एक ही फैन ID पर लागू करें (डिफ़ॉल्ट: सभी फैन)
+      --fan-auto          फैन का स्वचालित नियंत्रण बहाल करें और बाहर निकलें (sudo आवश्यक)
+      --fan-status        फैन की स्थिति JSON में प्रिंट करें और बाहर निकलें
       --dump-temps        डायग्नोस्टिक: सभी कच्ची SMC तापमान कुंजियाँ दिखाएँ और बाहर निकलें
       --dump-debug        डायग्नोस्टिक: IOReport/HID/SMC/NVMe डीबग जानकारी दिखाएँ और बाहर निकलें
 
@@ -330,6 +334,15 @@ Fan_ControlActive = "[⚠ पंखा नियंत्रण सक्रि�
 Fan_ReadOnly = "[केवल पढ़ने के लिए](fg:%s)  लिखने के लिए --fan-control उपयोग करें  |  [l](fg:%s,mod:bold) लेआउट  [F](fg:%s,mod:bold) पंखा दृश्य बंद करें"
 Fan_NeedsRoot = "[⚠ फैन नियंत्रण के लिए root आवश्यक है — पुनः चलाएँ: sudo mactop --fan-control](fg:red,mod:bold)"
 Fan_WriteFailed = "  [⚠ अंतिम राइट का कोई प्रभाव नहीं (OS ने अस्वीकार किया)](fg:red,mod:bold)"
+FanCLI_NeedsRoot = "त्रुटि: फैन नियंत्रण लेखन के लिए root आवश्यक है — चलाएँ: sudo mactop %s"
+FanCLI_WriteFailed = "त्रुटि: फैन नियंत्रण लेखन विफल: %v"
+FanCLI_InvalidValue = "त्रुटि: अमान्य --fan-set मान '%s' — RPM संख्या, 60%% जैसा प्रतिशत, min, max या auto उपयोग करें"
+FanCLI_UnknownFan = "त्रुटि: ID %d वाला कोई फैन नहीं (%d फैन मिले)"
+FanCLI_NoMaxRPM = "त्रुटि: फैन अधिकतम RPM नहीं बताता — प्रतिशत/max के बजाय निरपेक्ष RPM मान उपयोग करें"
+FanCLI_FanPinned = "फैन %d को %d RPM पर स्थिर किया गया (मैनुअल मोड)"
+FanCLI_AutoRestored = "सभी फैन स्वचालित नियंत्रण पर बहाल किए गए"
+FanCLI_ManualWarning = "⚠ mactop बंद होने के बाद भी फैन मैनुअल मोड में रहते हैं — स्वचालित नियंत्रण बहाल करें: sudo mactop --fan-auto"
+FanCLI_VerifyFailed = "चेतावनी: SMC ने लेखन स्वीकार किया लेकिन फैन स्थिति नहीं बदली — OS ने इसे ओवरराइड किया हो सकता है"
 
 Metrics_PowerSparklineGroup = "%.2f W कुल (अधिकतम: %.2f W)"
 Metrics_PowerSparklineTitle = "औसत %.2f W | %s"

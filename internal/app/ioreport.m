@@ -2224,6 +2224,24 @@ static int readFanInfo(fan_info_t *fans, int maxFans) {
   return fanCount;
 }
 
+// ensureSMCConn opens the SMC connection on demand. The TUI path opens it in
+// initIOReport(), but the one-shot fan CLI (--fan-set / --fan-auto /
+// --fan-status) deliberately skips the full IOReport pipeline — without this,
+// every fan read/write would fail with a closed connection.
+static int ensureSMCConn(void) {
+  if (!g_smcConn)
+    g_smcConn = SMCOpen();
+  return g_smcConn ? 0 : -1;
+}
+
+// getFanList reads current fan state without requiring initIOReport().
+// Returns the number of fans written into the output array.
+int getFanList(fan_info_t *fans, int maxFans) {
+  if (ensureSMCConn() != 0)
+    return 0;
+  return readFanInfo(fans, maxFans);
+}
+
 // Fan control functions
 //
 // setFanForceTest writes the Intel-era "Ftst" (force test) key. This key does
@@ -2232,14 +2250,14 @@ static int readFanInfo(fan_info_t *fans, int maxFans) {
 // best-effort — the actual manual control on Apple Silicon is F<n>Md=1 plus
 // F<n>Tg=<rpm>. It is still attempted for Intel Macs where it helps.
 int setFanForceTest(int enabled) {
-  if (!g_smcConn)
+  if (ensureSMCConn() != 0)
     return -1;
   float val = enabled ? 1.0f : 0.0f;
   return (SMCSetFloat(g_smcConn, "Ftst", val) == kIOReturnSuccess) ? 0 : -1;
 }
 
 int setFanMode(int fanIndex, int mode) {
-  if (!g_smcConn)
+  if (ensureSMCConn() != 0)
     return -1;
   char key[5];
   snprintf(key, sizeof(key), "F%dMd", fanIndex);
@@ -2248,7 +2266,7 @@ int setFanMode(int fanIndex, int mode) {
 }
 
 int setFanTarget(int fanIndex, int rpm) {
-  if (!g_smcConn)
+  if (ensureSMCConn() != 0)
     return -1;
 
   // Read bounds for clamping
@@ -2270,10 +2288,10 @@ int setFanTarget(int fanIndex, int rpm) {
 }
 
 int resetFansToAuto() {
-  if (!g_smcConn)
+  if (ensureSMCConn() != 0)
     return -1;
 
-  // Clear force test mode
+  // Clear force test mode (best-effort: Ftst is absent on Apple Silicon)
   setFanForceTest(0);
 
   // Read fan count
@@ -2281,11 +2299,13 @@ int resetFansToAuto() {
   if (SMCReadKey(g_smcConn, "FNum", &val) != kIOReturnSuccess)
     return -1;
 
+  int rc = 0;
   int fanCount = (unsigned char)val.bytes[0];
   for (int i = 0; i < fanCount && i < 8; i++) {
-    setFanMode(i, 0); // 0 = auto
+    if (setFanMode(i, 0) != 0) // 0 = auto
+      rc = -1;
   }
-  return 0;
+  return rc;
 }
 
 // Cached NVMe SMART temps — refreshed periodically, seeded by HID NAND fallback

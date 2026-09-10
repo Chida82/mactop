@@ -281,6 +281,10 @@ Opsi:
       --overlay-sections  Bagian terlihat dipisahkan koma (cth. cpu,gpu,memory,power)
       --overlay-opacity   Opasitas jendela overlay, 0.15-1.0 (default: 0.88)
       --fan-control       Aktifkan kontrol kipas interaktif (menulis ke SMC)
+      --fan-set <value>   Atur kecepatan kipas lalu keluar: RPM, persentase (60%), min, max, atau auto (perlu sudo)
+      --fan-id <n>        Terapkan --fan-set ke satu ID kipas (default: semua kipas)
+      --fan-auto          Pulihkan kontrol kipas otomatis lalu keluar (perlu sudo)
+      --fan-status        Cetak status kipas sebagai JSON lalu keluar
       --dump-temps        Diagnostik: tampilkan semua kunci suhu SMC mentah dan keluar
       --dump-debug        Diagnostik: tampilkan info debug IOReport/HID/SMC/NVMe dan keluar
 
@@ -330,6 +334,15 @@ Fan_ControlActive = "[⚠ KONTROL KIPAS AKTIF](fg:red,mod:bold)  [+/-](fg:%s,mod
 Fan_ReadOnly = "[Hanya baca](fg:%s)  Gunakan --fan-control untuk menulis  |  [l](fg:%s,mod:bold) Tata Letak  [F](fg:%s,mod:bold) Tutup tampilan kipas"
 Fan_NeedsRoot = "[⚠ Kontrol kipas perlu root — jalankan ulang: sudo mactop --fan-control](fg:red,mod:bold)"
 Fan_WriteFailed = "  [⚠ penulisan terakhir tidak berpengaruh (ditolak OS)](fg:red,mod:bold)"
+FanCLI_NeedsRoot = "Kesalahan: penulisan kontrol kipas memerlukan root — jalankan: sudo mactop %s"
+FanCLI_WriteFailed = "Kesalahan: penulisan kontrol kipas gagal: %v"
+FanCLI_InvalidValue = "Kesalahan: nilai --fan-set tidak valid '%s' — gunakan angka RPM, persentase seperti 60%%, min, max, atau auto"
+FanCLI_UnknownFan = "Kesalahan: tidak ada kipas dengan ID %d (terdeteksi %d kipas)"
+FanCLI_NoMaxRPM = "Kesalahan: kipas tidak melaporkan RPM maksimum — gunakan nilai RPM absolut alih-alih persentase/max"
+FanCLI_FanPinned = "Kipas %d dikunci pada %d RPM (mode manual)"
+FanCLI_AutoRestored = "Semua kipas dikembalikan ke kontrol otomatis"
+FanCLI_ManualWarning = "⚠ Kipas tetap dalam mode manual setelah mactop keluar — pulihkan kontrol otomatis dengan: sudo mactop --fan-auto"
+FanCLI_VerifyFailed = "Peringatan: SMC menerima penulisan tetapi status kipas tidak berubah — OS mungkin telah menimpanya"
 
 Metrics_PowerSparklineGroup = "%.2f W Total (Maks: %.2f W)"
 Metrics_PowerSparklineTitle = "Rata-rata %.2f W | %s"

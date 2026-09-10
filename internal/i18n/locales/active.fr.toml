@@ -281,6 +281,10 @@ Options :
       --overlay-sections  Sections visibles séparées par des virgules (ex. cpu,gpu,memory,power)
       --overlay-opacity   Opacité de la fenêtre overlay, 0.15-1.0 (défaut : 0.88)
       --fan-control       Activer le contrôle interactif des ventilateurs (écrit dans le SMC)
+      --fan-set <value>   Régler la vitesse des ventilateurs et quitter : RPM, pourcentage (60%), min, max ou auto (nécessite sudo)
+      --fan-id <n>        Appliquer --fan-set à un seul ID de ventilateur (par défaut : tous)
+      --fan-auto          Restaurer le contrôle automatique des ventilateurs et quitter (nécessite sudo)
+      --fan-status        Afficher l'état des ventilateurs en JSON et quitter
       --dump-temps        Diagnostic : afficher toutes les clés de température SMC puis quitter
       --dump-debug        Diagnostic : afficher les infos de debug IOReport/HID/SMC/NVMe puis quitter
 
@@ -330,6 +334,15 @@ Fan_ControlActive = "[⚠ CONTRÔLE VENTILATEUR ACTIF](fg:red,mod:bold)  [+/-](f
 Fan_ReadOnly = "[Lecture seule](fg:%s)  Utilisez --fan-control pour autoriser l’écriture  |  [l](fg:%s,mod:bold) Dispo  [F](fg:%s,mod:bold) Quitter la vue ventilateurs"
 Fan_NeedsRoot = "[⚠ Le contrôle des ventilateurs nécessite root — relancez avec : sudo mactop --fan-control](fg:red,mod:bold)"
 Fan_WriteFailed = "  [⚠ la dernière écriture n'a eu aucun effet (refusée par l'OS)](fg:red,mod:bold)"
+FanCLI_NeedsRoot = "Erreur : les écritures de contrôle des ventilateurs nécessitent root — exécutez : sudo mactop %s"
+FanCLI_WriteFailed = "Erreur : échec de l'écriture de contrôle des ventilateurs : %v"
+FanCLI_InvalidValue = "Erreur : valeur --fan-set invalide '%s' — utilisez un nombre de RPM, un pourcentage comme 60%%, min, max ou auto"
+FanCLI_UnknownFan = "Erreur : aucun ventilateur avec l'ID %d (%d ventilateurs détectés)"
+FanCLI_NoMaxRPM = "Erreur : le ventilateur ne signale pas de RPM max — utilisez une valeur RPM absolue au lieu de pourcentage/max"
+FanCLI_FanPinned = "Ventilateur %d fixé à %d RPM (mode manuel)"
+FanCLI_AutoRestored = "Tous les ventilateurs sont revenus au contrôle automatique"
+FanCLI_ManualWarning = "⚠ Les ventilateurs restent en mode manuel après la fermeture de mactop — restaurez le contrôle automatique avec : sudo mactop --fan-auto"
+FanCLI_VerifyFailed = "Avertissement : le SMC a accepté l'écriture mais l'état du ventilateur n'a pas changé — le système l'a peut-être annulée"
 
 Metrics_PowerSparklineGroup = "%.2f W Total (Max : %.2f W)"
 Metrics_PowerSparklineTitle = "Moy %.2f W | %s"

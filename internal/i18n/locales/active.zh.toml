@@ -282,6 +282,10 @@ CLI_HelpText = """
       --overlay-sections  逗号分隔的可见区块（例如 cpu,gpu,memory,power）
       --overlay-opacity   overlay 窗口透明度，0.15-1.0（默认：0.88）
       --fan-control       启用交互式风扇控制（会写入 SMC）
+      --fan-set <value>   设置风扇速度并退出：RPM、百分比 (60%)、min、max 或 auto（需要 sudo）
+      --fan-id <n>        将 --fan-set 应用于单个风扇 ID（默认：所有风扇）
+      --fan-auto          恢复风扇自动控制并退出（需要 sudo）
+      --fan-status        以 JSON 输出风扇状态并退出
       --dump-temps        诊断：输出所有原始 SMC 温度键并退出
       --dump-debug        诊断：输出 IOReport/HID/SMC/NVMe 调试信息并退出
 
@@ -331,6 +335,15 @@ Fan_ControlActive = "[⚠ 风扇控制已启用](fg:red,mod:bold)  [+/-](fg:%s,m
 Fan_ReadOnly = "[只读](fg:%s)  使用 --fan-control 启用写入  |  [l](fg:%s,mod:bold) 布局  [F](fg:%s,mod:bold) 退出风扇视图"
 Fan_NeedsRoot = "[⚠ 风扇控制需要 root — 重新运行: sudo mactop --fan-control](fg:red,mod:bold)"
 Fan_WriteFailed = "  [⚠ 上次写入未生效 (被系统拒绝)](fg:red,mod:bold)"
+FanCLI_NeedsRoot = "错误：风扇控制写入需要 root 权限 — 请运行：sudo mactop %s"
+FanCLI_WriteFailed = "错误:风扇控制写入失败:%v"
+FanCLI_InvalidValue = "错误:--fan-set 值 '%s' 无效 — 请使用 RPM 数值、60%% 这样的百分比、min、max 或 auto"
+FanCLI_UnknownFan = "错误:没有 ID 为 %d 的风扇(检测到 %d 个风扇)"
+FanCLI_NoMaxRPM = "错误:风扇未报告最大 RPM — 请使用绝对 RPM 值而不是百分比/max"
+FanCLI_FanPinned = "风扇 %d 已固定为 %d RPM(手动模式)"
+FanCLI_AutoRestored = "所有风扇已恢复自动控制"
+FanCLI_ManualWarning = "⚠ mactop 退出后风扇仍保持手动模式 — 恢复自动控制请运行:sudo mactop --fan-auto"
+FanCLI_VerifyFailed = "警告:SMC 接受了写入,但风扇状态未改变 — 操作系统可能已将其覆盖"
 
 Metrics_PowerSparklineGroup = "%.2f W 总计 (最大: %.2f W)"
 Metrics_PowerSparklineTitle = "平均 %.2f W | %s"

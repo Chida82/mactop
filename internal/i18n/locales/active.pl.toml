@@ -281,6 +281,10 @@ Opcje:
       --overlay-sections  Widoczne sekcje oddzielone przecinkami (np. cpu,gpu,memory,power)
       --overlay-opacity   Przezroczystość okna overlay, 0.15-1.0 (domyślnie: 0.88)
       --fan-control       Włącz interaktywne sterowanie wentylatorami (zapis do SMC)
+      --fan-set <value>   Ustaw prędkość wentylatorów i zakończ: RPM, procent (60%), min, max lub auto (wymaga sudo)
+      --fan-id <n>        Zastosuj --fan-set do jednego ID wentylatora (domyślnie: wszystkie)
+      --fan-auto          Przywróć automatyczne sterowanie wentylatorami i zakończ (wymaga sudo)
+      --fan-status        Wypisz stan wentylatorów jako JSON i zakończ
       --dump-temps        Diagnostyka: pokaż wszystkie klucze temperatury SMC i zakończ
       --dump-debug        Diagnostyka: pokaż informacje debugowania IOReport/HID/SMC/NVMe i zakończ
 
@@ -330,6 +334,15 @@ Fan_ControlActive = "[⚠ STEROWANIE WENTYLATORAMI AKTYWNE](fg:red,mod:bold)  [+
 Fan_ReadOnly = "[Tylko odczyt](fg:%s)  Użyj --fan-control aby włączyć zapis  |  [l](fg:%s,mod:bold) Układ  [F](fg:%s,mod:bold) Zamknij widok wentylatora"
 Fan_NeedsRoot = "[⚠ Sterowanie wentylatorami wymaga roota — uruchom ponownie: sudo mactop --fan-control](fg:red,mod:bold)"
 Fan_WriteFailed = "  [⚠ ostatni zapis nie przyniósł efektu (odrzucony przez system)](fg:red,mod:bold)"
+FanCLI_NeedsRoot = "Błąd: zapisy sterowania wentylatorami wymagają roota — uruchom: sudo mactop %s"
+FanCLI_WriteFailed = "Błąd: zapis sterowania wentylatorami nie powiódł się: %v"
+FanCLI_InvalidValue = "Błąd: nieprawidłowa wartość --fan-set '%s' — użyj liczby RPM, procentu jak 60%%, min, max lub auto"
+FanCLI_UnknownFan = "Błąd: brak wentylatora o ID %d (wykryto %d wentylatorów)"
+FanCLI_NoMaxRPM = "Błąd: wentylator nie zgłasza maksymalnych RPM — użyj bezwzględnej wartości RPM zamiast procentu/max"
+FanCLI_FanPinned = "Wentylator %d ustawiony na %d RPM (tryb ręczny)"
+FanCLI_AutoRestored = "Wszystkie wentylatory przywrócone do sterowania automatycznego"
+FanCLI_ManualWarning = "⚠ Wentylatory pozostają w trybie ręcznym po zamknięciu mactop — przywróć sterowanie automatyczne: sudo mactop --fan-auto"
+FanCLI_VerifyFailed = "Ostrzeżenie: SMC zaakceptował zapis, ale stan wentylatora się nie zmienił — system mógł go nadpisać"
 
 Metrics_PowerSparklineGroup = "%.2f W Razem (Maks: %.2f W)"
 Metrics_PowerSparklineTitle = "Średn %.2f W | %s"
