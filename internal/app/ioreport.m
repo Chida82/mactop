@@ -750,12 +750,131 @@ static void startBgCalibrationOnce(void) {
   }
 }
 
+// Multi-die chips (M-series Ultra) split the PMP group per die: "PMP0",
+// "PMP1", ... and the bare "PMP" group exists with zero channels.
+static bool isPMPGroup(const char *grp) {
+  if (strncmp(grp, "PMP", 3) != 0)
+    return false;
+  for (const char *p = grp + 3; *p; p++) {
+    if (*p < '0' || *p > '9')
+      return false;
+  }
+  return true;
+}
+
+static CFIndex pmpChannelCount(CFDictionaryRef chans) {
+  if (chans == NULL)
+    return 0;
+  CFArrayRef arr = CFDictionaryGetValue(chans, CFSTR("IOReportChannels"));
+  return arr ? CFArrayGetCount(arr) : 0;
+}
+
+// Copies the channels of "PMP" plus every per-die "PMP<n>" group into one
+// dictionary. Returns NULL when no PMP group has any channel.
+static CFDictionaryRef copyPMPChannels(void) {
+  CFMutableDictionaryRef merged = NULL;
+  for (int die = -1; die < 8; die++) {
+    char name[8];
+    if (die < 0)
+      snprintf(name, sizeof(name), "PMP");
+    else
+      snprintf(name, sizeof(name), "PMP%d", die);
+    CFStringRef grp = CFStringCreateWithCString(kCFAllocatorDefault, name,
+                                                kCFStringEncodingUTF8);
+    CFDictionaryRef chans = IOReportCopyChannelsInGroup(grp, NULL, 0, 0, 0);
+    CFRelease(grp);
+    if (pmpChannelCount(chans) == 0) {
+      if (chans != NULL)
+        CFRelease(chans);
+      continue;
+    }
+    if (merged == NULL)
+      merged = CFDictionaryCreateMutableCopy(kCFAllocatorDefault, 0, chans);
+    else
+      IOReportMergeChannels((CFDictionaryRef)merged, chans, NULL);
+    CFRelease(chans);
+  }
+  return merged;
+}
+
+// Returns the character after "ANE<digits>", or NULL when chn does not start
+// with "ANE". Single-die chips name the engine "ANE"/"ANE0"; Ultra has one
+// per die ("ANE0", "ANE1").
+static const char *skipAneEngineName(const char *chn) {
+  if (strncmp(chn, "ANE", 3) != 0)
+    return NULL;
+  const char *p = chn + 3;
+  while (*p >= '0' && *p <= '9')
+    p++;
+  return p;
+}
+
+// ANE performance-floor request channels: "ANE-AF-BW", "ANE-DCS-BW" on
+// single-die chips; "ANE0-LNK0-AF-BW", "ANE1-DCS-BW", ... on Ultra.
+static bool isAneFloorChannelName(const char *chn, const char *sub) {
+  if (strstr(sub, "Floor") == NULL)
+    return false;
+  const char *p = skipAneEngineName(chn);
+  if (p == NULL)
+    return false;
+  if (strncmp(p, "-LNK", 4) == 0) {
+    p += 4;
+    while (*p >= '0' && *p <= '9')
+      p++;
+  }
+  return strcmp(p, "-AF-BW") == 0 || strcmp(p, "-DCS-BW") == 0;
+}
+
+// Bare engine state channel ("ANE0", "ANE1").
+static bool isAneEngineStateChannelName(const char *chn, const char *sub) {
+  const char *p = skipAneEngineName(chn);
+  if (p == NULL || *p != '\0' || p == chn + 3)
+    return false;
+  return strstr(sub, "Floor") != NULL || strstr(sub, "Fast-Die") != NULL ||
+         strstr(sub, "CE") != NULL || strstr(sub, "SOC") != NULL ||
+         strstr(sub, "Util") != NULL;
+}
+
+#define ANE_BW_MAX 32
+
+typedef enum { ANE_BW_READ, ANE_BW_WRITE, ANE_BW_COMBINED } AneBwKind;
+
+typedef struct {
+  char key[96];
+  int64_t bytes;
+  AneBwKind kind;
+} AneBwSample;
+
+static void recordAneBw(AneBwSample *table, int *count, const char *grp,
+                        const char *chn, int64_t bytes, AneBwKind kind) {
+  char key[96];
+  snprintf(key, sizeof(key), "%s/%s", grp, chn);
+  for (int i = 0; i < *count; i++) {
+    if (strcmp(table[i].key, key) != 0)
+      continue;
+    if (bytes > table[i].bytes)
+      table[i].bytes = bytes;
+    return;
+  }
+  if (*count >= ANE_BW_MAX)
+    return;
+  snprintf(table[*count].key, sizeof(table[*count].key), "%s", key);
+  table[*count].bytes = bytes;
+  table[*count].kind = kind;
+  (*count)++;
+}
+
+// out is indexed by AneBwKind: {read, write, combined}.
+static void sumAneBw(const AneBwSample *table, int count, int64_t *out[3]) {
+  for (int i = 0; i < count; i++)
+    *out[table[i].kind] += table[i].bytes;
+}
+
 static void ensurePMPDramChannels(void) {
   if (g_pmp_channels_attempted || g_channels == NULL)
     return;
 
-  CFDictionaryRef pmpChan =
-      IOReportCopyChannelsInGroup(CFSTR("PMP"), NULL, 0, 0, 0);
+  CFDictionaryRef pmpChan = copyPMPChannels();
   if (pmpChan == NULL) {
     // No PMP group exists on this machine — permanent, mark attempted so we
     // don't probe every sample.
@@ -1075,7 +1194,7 @@ int initIOReport() {
   // samplePowerMetrics are duplicate-safe (max, not sum) either way — the
   // dynamic PMP fallback re-merge can still introduce duplicates later.
   if (!g_pmp_channels_attempted) {
-    CFDictionaryRef pmpAll = IOReportCopyChannelsInGroup(CFSTR("PMP"), NULL, 0, 0, 0);
+    CFDictionaryRef pmpAll = copyPMPChannels();
     if (pmpAll) {
       CFArrayRef pmpChs = CFDictionaryGetValue(pmpAll, CFSTR("IOReportChannels"));
       CFIndex pmpCnt = pmpChs ? CFArrayGetCount(pmpChs) : 0;
@@ -1165,7 +1284,7 @@ void debugIOReport() {
     const char *groups[] = {
         "Energy Model",           "GPU Stats", "CPU Stats", "AMC Stats",
         "ODS",                    "Performance Statistics", "CLPC",
-        "PMP",                    NULL};
+        "PMP",                    "PMP0", "PMP1", NULL};
 
     for (int i = 0; groups[i] != NULL; i++) {
       CFStringRef groupStr = CFStringCreateWithCString(
@@ -1262,7 +1381,7 @@ void dumpIOReportDebug(void) {
   printf("--- IOReport Channel Groups ---\n");
   const char *groups[] = {
     "Energy Model", "GPU Stats", "CPU Stats", "AMC Stats",
-    "PMP", "CLPC", "ODS", "Performance Statistics",
+    "PMP", "PMP0", "PMP1", "CLPC", "ODS", "Performance Statistics",
     NULL
   };
   for (int i = 0; groups[i] != NULL; i++) {
@@ -1749,7 +1868,7 @@ static void printLiveEnergyContributors(int durationMs) {
   // they ever produce data) are the ones mactop's ANE %% is computed from:
   // active = time not in OFF/IDLE/DOWN/SLEEP/VMIN/F1/0%%.
   printf("\n--- PMP ANE channel scan (raw state residencies) ---\n");
-  CFDictionaryRef pmp = IOReportCopyChannelsInGroup(CFSTR("PMP"), NULL, 0, 0, 0);
+  CFDictionaryRef pmp = copyPMPChannels();
   if (pmp) {
     CFMutableDictionaryRef pmpCh = CFDictionaryCreateMutableCopy(kCFAllocatorDefault, CFDictionaryGetCount(pmp), pmp);
     CFRelease(pmp);
@@ -1778,17 +1897,13 @@ static void printLiveEnergyContributors(int durationMs) {
             char gbuf[64]={0}, nbuf[256]={0};
             CFStringGetCString(grp, gbuf, sizeof(gbuf), kCFStringEncodingUTF8);
             CFStringGetCString(nm, nbuf, sizeof(nbuf), kCFStringEncodingUTF8);
-            if (strcmp(gbuf, "PMP") != 0) continue;
+            if (!isPMPGroup(gbuf)) continue;
             if (strstr(nbuf, "ANE") == NULL && strstr(nbuf, "ane") == NULL) continue;
             CFStringRef subRef = IOReportChannelGetSubGroup(ch);
             char sub[64]={0};
             if (subRef) CFStringGetCString(subRef, sub, sizeof(sub), kCFStringEncodingUTF8);
-            bool isAneFloorChannel =
-                (strcmp(nbuf, "ANE-AF-BW") == 0 || strcmp(nbuf, "ANE-DCS-BW") == 0) &&
-                strstr(sub, "Floor") != NULL;
-            bool isAneEngineStateChannel = (strcmp(nbuf, "ANE0") == 0) &&
-              (strstr(sub, "Floor") != NULL || strstr(sub, "Fast-Die") != NULL ||
-               strstr(sub, "CE") != NULL || strstr(sub, "SOC") != NULL || strstr(sub, "Util") != NULL);
+            bool isAneFloorChannel = isAneFloorChannelName(nbuf, sub);
+            bool isAneEngineStateChannel = isAneEngineStateChannelName(nbuf, sub);
             CFStringRef uRef = IOReportChannelGetUnitLabel(ch);
             char ubuf[32]={0};
             if (uRef) CFStringGetCString(uRef, ubuf, sizeof(ubuf), kCFStringEncodingUTF8);
@@ -2994,6 +3109,8 @@ PowerMetrics samplePowerMetrics(int durationMs) {
   int64_t pmpAneCombinedBytes = 0; // combined "ANE RD+WR" (chips without split RD/WR)
   bool sawAnePmpActivity = false;  // any positive residency on ANE* PMP channels (macOS 27+)
   bool sawAneUtilChannel = false;  // a usable PMP ANE floor/util channel was present at all
+  AneBwSample aneBw[ANE_BW_MAX];
+  int aneBwCount = 0;
 
   for (CFIndex i = 0; i < count; i++) {
     CFDictionaryRef item = (CFDictionaryRef)CFArrayGetValueAtIndex(channels, i);
@@ -3290,7 +3407,7 @@ PowerMetrics samplePowerMetrics(int durationMs) {
         amcRequestWriteBytes += val;
         hasAmcRequestBytes = 1;
       }
-    } else if (strcmp(grp, "PMP") == 0) {
+    } else if (isPMPGroup(grp)) {
       // PMP can provide DRAM bandwidth on systems where AMC Stats channels are
       // absent or do not produce delta data.
       char sub[64] = {0};
@@ -3339,12 +3456,8 @@ PowerMetrics samplePowerMetrics(int durationMs) {
         }
         int32_t stateCount = IOReportStateGetCount(item);
 
-        bool isAneFloorChannel =
-            (strcmp(chn, "ANE-AF-BW") == 0 || strcmp(chn, "ANE-DCS-BW") == 0) &&
-            strstr(sub, "Floor") != NULL;
-        bool isAneEngineStateChannel = (strcmp(chn, "ANE0") == 0) &&
-          (strstr(sub, "Floor") != NULL || strstr(sub, "Fast-Die") != NULL ||
-           strstr(sub, "CE") != NULL || strstr(sub, "SOC") != NULL || strstr(sub, "Util") != NULL);
+        bool isAneFloorChannel = isAneFloorChannelName(chn, sub);
+        bool isAneEngineStateChannel = isAneEngineStateChannelName(chn, sub);
 
         // Utilization %: time NOT spent in the idle/floor state, from actual
         // residency deltas. Idle states: OFF/IDLE/DOWN/SLEEP plus the lowest
@@ -3417,22 +3530,27 @@ PowerMetrics samplePowerMetrics(int durationMs) {
                                    ? (double)metrics.actualDurationNs / 1e9
                                    : (double)durationMs / 1000.0;
             int64_t bytes = (int64_t)(avgGBs * 1e9 * sampleSec);
-            // max, not +=: a channel may appear more than once in a merged
-            // subscription — summing would double count. "RD+WR" is the
-            // combined total (kept apart so it isn't mistaken for read-only).
-            if (strstr(chn, "RD+WR") != NULL || strstr(chn, "RW") != NULL) {
-              if (bytes > pmpAneCombinedBytes) pmpAneCombinedBytes = bytes;
-            } else if (strstr(chn, "RD") != NULL) {
-              if (bytes > pmpAneReadBytes) pmpAneReadBytes = bytes;
-            } else {
-              if (bytes > pmpAneWriteBytes) pmpAneWriteBytes = bytes;
-            }
+            // Single-die chips have one channel per direction; Ultra has one
+            // per die and link ("ANE0 L0 RD", "ANE1 L1 RD", ...), which sum.
+            // A channel may also appear more than once in a merged
+            // subscription, so keep the max per distinct group/name.
+            // "RD+WR" is the combined total (kept apart so it isn't mistaken
+            // for read-only).
+            AneBwKind kind = ANE_BW_WRITE;
+            if (strstr(chn, "RD+WR") != NULL || strstr(chn, "RW") != NULL)
+              kind = ANE_BW_COMBINED;
+            else if (strstr(chn, "RD") != NULL)
+              kind = ANE_BW_READ;
+            recordAneBw(aneBw, &aneBwCount, grp, chn, bytes, kind);
             sawAnePmpActivity = true;
           }
         }
       }
     }
   }
+  int64_t *aneBwOut[3] = {&pmpAneReadBytes, &pmpAneWriteBytes,
+                          &pmpAneCombinedBytes};
+  sumAneBw(aneBw, aneBwCount, aneBwOut);
 
   // Post-loop: assign accumulated CPU cluster metrics to final metrics.
   // On M5+ chips (mClusterCount > 0): MCPU = Performance (pCluster), PCPU = Super (sCluster).
