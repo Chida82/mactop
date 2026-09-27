@@ -938,6 +938,22 @@ static double sumPmpPower(const PmpPowerSample *table, int count) {
   return sum;
 }
 
+// Whole-machine power, first key that reads non-zero wins:
+//   PSTR  System Total. Laptops; reads 0 on Mac Studio.
+//   PDTR  DC-In total. Reads 0 on Mac Studio.
+//   PD0R  DC-In rail. The internal PSU's output on Mac Studio, so the
+//         whole board. Only reached when PSTR is 0, so laptops (where it
+//         would include battery charging) keep PSTR.
+static double readSystemPower(io_connect_t conn) {
+  static const char *keys[] = {"PSTR", "PDTR", "PD0R"};
+  for (size_t i = 0; i < sizeof(keys) / sizeof(keys[0]); i++) {
+    double w = SMCGetFloatValue(conn, keys[i]);
+    if (w > 0)
+      return w;
+  }
+  return 0;
+}
+
 static void ensurePMPDramChannels(void) {
   if (g_pmp_channels_attempted || g_channels == NULL)
     return;
@@ -3849,7 +3865,7 @@ PowerMetrics samplePowerMetrics(int durationMs) {
   // This avoids a redundant HID service enumeration on systems where HID provides good data.
 
   if (g_smcConn) {
-    metrics.systemPower = SMCGetFloatValue(g_smcConn, "PSTR");
+    metrics.systemPower = readSystemPower(g_smcConn);
   }
 
   // Read fan data
