@@ -190,6 +190,7 @@ static IOReportSubscriptionRef g_subscription = NULL;
 static CFMutableDictionaryRef g_channels = NULL;
 static io_connect_t g_smcConn = 0;
 static bool g_energyModelCpuGated = false;
+static bool g_energyModelDramGated = false;
 static uint32_t g_gpu_freqs[64];
 static int g_gpu_freq_count = 0;
 static uint32_t g_ecpu_freqs[64];
@@ -825,6 +826,32 @@ static double readSystemPower(io_connect_t conn) {
       return w;
   }
   return 0;
+}
+
+// DRAM power from SMC "PZD1", "PZD2", ... (one per die), for when the
+// Energy Model DRAM counters are gated (macOS 27). On an M5 Max, PZD1 rose
+// from 1.8 W to 5.9 / 8.0 / 12.8 / 14.0 W with 1 / 2 / 4 / 8 memory-streaming
+// threads and stayed at 1.8 W under 12 compute-only threads. The key count is
+// probed once; keys are contiguous from 1.
+static double readDramPower(io_connect_t conn) {
+  static int keyCount = -1;
+  char key[5];
+  if (keyCount < 0) {
+    keyCount = 0;
+    for (int i = 1; i <= 8; i++) {
+      SMCKeyData_t val;
+      snprintf(key, sizeof(key), "PZD%d", i);
+      if (SMCReadKey(conn, key, &val) != kIOReturnSuccess)
+        break;
+      keyCount = i;
+    }
+  }
+  double watts = 0;
+  for (int i = 1; i <= keyCount; i++) {
+    snprintf(key, sizeof(key), "PZD%d", i);
+    watts += SMCGetFloatValue(conn, key);
+  }
+  return watts;
 }
 
 static void ensurePMPDramChannels(void) {
@@ -3553,6 +3580,15 @@ PowerMetrics samplePowerMetrics(int durationMs) {
   // aggregate "... Energy" aliases apply only when no block produced data.
   metrics.anePower += (aneBlockEnergyW > 0) ? aneBlockEnergyW : aneNamedEnergyW;
   metrics.dramPower += (dramBlockEnergyW > 0) ? dramBlockEnergyW : dramNamedEnergyW;
+  // Same gating as the CPU counters above: latch the SMC DRAM keys on the
+  // first sample where the Energy Model reads 0 but SMC shows DRAM power.
+  if (g_smcConn) {
+    double smcDramW = readDramPower(g_smcConn);
+    if (metrics.dramPower <= 0 && smcDramW > 0)
+      g_energyModelDramGated = true;
+    if (g_energyModelDramGated)
+      metrics.dramPower = smcDramW;
+  }
 
   if (hasAmcExactDcsDirectional) {
     metrics.dramReadBytes = amcExactDcsReadBytes;
