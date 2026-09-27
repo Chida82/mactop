@@ -870,6 +870,74 @@ static void sumAneBw(const AneBwSample *table, int count, int64_t *out[3]) {
     *out[table[i].kind] += table[i].bytes;
 }
 
+// CPU cluster power histograms: PMP<n> / "Energy" / "PACC0", "MACC1",
+// "PACC0 SRAM", ... State channels whose state names are watt bins ("2W",
+// "0.250W"). Used for CPU power when the Energy Model CPU counters read 0
+// (M5 / macOS 27). "AGX" (GPU) lives here too but is not a CPU channel.
+static bool isPmpCpuPowerChannel(const char *sub, const char *chn) {
+  if (strcmp(sub, "Energy") != 0 || strlen(chn) < 5)
+    return false;
+  return strncmp(chn + 1, "ACC", 3) == 0 && chn[4] >= '0' && chn[4] <= '9';
+}
+
+// Residency-weighted average of a watt-bin histogram. Each bin reads at its
+// label, checked against the Energy Model "GPU Energy" counter on an M5
+// Ultra: the PMP "AGX" histogram read this way averaged 62.2 W against
+// 63.5 W over the same 8 s (bin midpoints gave 60.2 W). The lowest bin
+// ("2W" for a CPU cluster) reads as 0: an idle, power-gated cluster sits
+// there 100% of the time, and reading it at its label would add 2 W per
+// idle cluster.
+static double pmpHistogramWatts(CFDictionaryRef item) {
+  int32_t n = IOReportStateGetCount(item);
+  int64_t total = 0;
+  double weighted = 0;
+  for (int32_t s = 0; s < n; s++) {
+    int64_t r = IOReportStateGetResidency(item, s);
+    CFStringRef name = IOReportStateGetNameForIndex(item, s);
+    total += r;
+    if (s == 0 || r <= 0 || name == NULL)
+      continue;
+    char buf[32] = {0};
+    CFStringGetCString(name, buf, sizeof(buf), kCFStringEncodingUTF8);
+    weighted += atof(buf) * (double)r;
+  }
+  return total > 0 ? weighted / (double)total : 0;
+}
+
+#define PMP_POWER_MAX 32
+
+typedef struct {
+  char key[96];
+  double watts;
+} PmpPowerSample;
+
+// Max per distinct group/name, so a channel merged into the subscription
+// twice is not counted twice.
+static void recordPmpPower(PmpPowerSample *table, int *count, const char *grp,
+                           const char *chn, double watts) {
+  char key[96];
+  snprintf(key, sizeof(key), "%s/%s", grp, chn);
+  for (int i = 0; i < *count; i++) {
+    if (strcmp(table[i].key, key) != 0)
+      continue;
+    if (watts > table[i].watts)
+      table[i].watts = watts;
+    return;
+  }
+  if (*count >= PMP_POWER_MAX)
+    return;
+  snprintf(table[*count].key, sizeof(table[*count].key), "%s", key);
+  table[*count].watts = watts;
+  (*count)++;
+}
+
+static double sumPmpPower(const PmpPowerSample *table, int count) {
+  double sum = 0;
+  for (int i = 0; i < count; i++)
+    sum += table[i].watts;
+  return sum;
+}
+
 static void ensurePMPDramChannels(void) {
   if (g_pmp_channels_attempted || g_channels == NULL)
     return;
@@ -1186,7 +1254,8 @@ int initIOReport() {
   // channels) to reduce per-tick IPC cost. That meant the main subscription
   // never bound to the PMP ANE channels → ANE always appeared as zero.
   //
-  // Fix: pull in *only* the ANE-related PMP channels (filtered by name).
+  // Fix: pull in *only* the ANE-related PMP channels (filtered by name),
+  // plus the "Energy" CPU cluster histograms used for CPU power on M5.
   // This binds us to the correct IOReport data for ANE without the full PMP cost.
   // Skipped when ensurePMPDramChannels() already merged the full PMP group
   // above (A-series, and M5+ without direct AMC BW): merging the ANE channels
@@ -1203,10 +1272,15 @@ int initIOReport() {
         for (CFIndex i = 0; i < pmpCnt; i++) {
           CFDictionaryRef ch = (CFDictionaryRef)CFArrayGetValueAtIndex(pmpChs, i);
           CFStringRef nm = IOReportChannelGetChannelName(ch);
+          CFStringRef sg = IOReportChannelGetSubGroup(ch);
           if (nm) {
             char buf[256] = {0};
+            char sbuf[64] = {0};
             CFStringGetCString(nm, buf, sizeof(buf), kCFStringEncodingUTF8);
-            if (strstr(buf, "ANE") != NULL || strstr(buf, "ane") != NULL) {
+            if (sg)
+              CFStringGetCString(sg, sbuf, sizeof(sbuf), kCFStringEncodingUTF8);
+            if (strstr(buf, "ANE") != NULL || strstr(buf, "ane") != NULL ||
+                isPmpCpuPowerChannel(sbuf, buf)) {
               CFArrayAppendValue(aneChs, ch);
             }
           }
@@ -3111,6 +3185,8 @@ PowerMetrics samplePowerMetrics(int durationMs) {
   bool sawAneUtilChannel = false;  // a usable PMP ANE floor/util channel was present at all
   AneBwSample aneBw[ANE_BW_MAX];
   int aneBwCount = 0;
+  PmpPowerSample pmpCpu[PMP_POWER_MAX];
+  int pmpCpuCount = 0;
 
   for (CFIndex i = 0; i < count; i++) {
     CFDictionaryRef item = (CFDictionaryRef)CFArrayGetValueAtIndex(channels, i);
@@ -3415,6 +3491,9 @@ PowerMetrics samplePowerMetrics(int durationMs) {
       if (subgroupRef != NULL) {
         CFStringGetCString(subgroupRef, sub, sizeof(sub), kCFStringEncodingUTF8);
       }
+      if (isPmpCpuPowerChannel(sub, chn) && IOReportStateGetCount(item) > 1) {
+        recordPmpPower(pmpCpu, &pmpCpuCount, grp, chn, pmpHistogramWatts(item));
+      }
       if (strcmp(sub, "DRAM BW") == 0) {
         int64_t val = IOReportSimpleGetIntegerValue(item, 0);
         if (validIOReportCounter(val) && val > 0) {
@@ -3582,6 +3661,10 @@ PowerMetrics samplePowerMetrics(int durationMs) {
   // Prefer whole-CPU energy totals; fall back to the sum of cluster-type
   // channels when only those exist (newer chip/OS naming generations).
   metrics.cpuPower = (cpuTotalEnergyW > 0) ? cpuTotalEnergyW : cpuTypedEnergyW;
+  // M5 / macOS 27: every Energy Model CPU counter reads 0. Fall back to the
+  // PMP per-cluster power histograms.
+  if (metrics.cpuPower <= 0)
+    metrics.cpuPower = sumPmpPower(pmpCpu, pmpCpuCount);
   // GPU: "GPU Energy" is the canonical channel; the bare "GPU" alias is used
   // only when the canonical one produced nothing.
   metrics.gpuPower += (gpuEnergyNamedW > 0) ? gpuEnergyNamedW : gpuEnergyAliasW;
