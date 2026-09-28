@@ -2,6 +2,7 @@
 // ioreport.m - Objective-C implementation for IOReport power/thermal metrics
 
 #include "smc.h"
+#include "pmp_names.h"
 #import <CoreFoundation/CoreFoundation.h>
 #import <CoreWLAN/CoreWLAN.h>
 #import <Foundation/Foundation.h>
@@ -188,6 +189,8 @@ typedef struct {
 static IOReportSubscriptionRef g_subscription = NULL;
 static CFMutableDictionaryRef g_channels = NULL;
 static io_connect_t g_smcConn = 0;
+static bool g_energyModelCpuGated = false;
+static bool g_energyModelDramGated = false;
 static uint32_t g_gpu_freqs[64];
 static int g_gpu_freq_count = 0;
 static uint32_t g_ecpu_freqs[64];
@@ -750,12 +753,112 @@ static void startBgCalibrationOnce(void) {
   }
 }
 
+static CFIndex pmpChannelCount(CFDictionaryRef chans) {
+  if (chans == NULL)
+    return 0;
+  CFArrayRef arr = CFDictionaryGetValue(chans, CFSTR("IOReportChannels"));
+  return arr ? CFArrayGetCount(arr) : 0;
+}
+
+// Copies the channels of "PMP" plus the per-die "PMP0", "PMP1", ... groups
+// into one dictionary. Dies are numbered contiguously, so probing stops at the
+// first empty one. Returns NULL when no PMP group has any channel.
+static CFDictionaryRef copyPMPChannels(void) {
+  CFMutableDictionaryRef merged = NULL;
+  for (int die = -1; die < 8; die++) {
+    char name[8];
+    if (die < 0)
+      snprintf(name, sizeof(name), "PMP");
+    else
+      snprintf(name, sizeof(name), "PMP%d", die);
+    CFStringRef grp = CFStringCreateWithCString(kCFAllocatorDefault, name,
+                                                kCFStringEncodingUTF8);
+    CFDictionaryRef chans = IOReportCopyChannelsInGroup(grp, NULL, 0, 0, 0);
+    CFRelease(grp);
+    if (pmpChannelCount(chans) == 0) {
+      if (chans != NULL)
+        CFRelease(chans);
+      if (die >= 0)
+        break;
+      continue;
+    }
+    if (merged == NULL)
+      merged = CFDictionaryCreateMutableCopy(kCFAllocatorDefault, 0, chans);
+    else
+      IOReportMergeChannels((CFDictionaryRef)merged, chans, NULL);
+    CFRelease(chans);
+  }
+  return merged;
+}
+
+// Residency-weighted average of a state channel whose state names are
+// numeric bins ("12GB/s", "2W", "0.250W"). See binWeightedAverage.
+#define PMP_MAX_BINS 64
+
+static double stateBinAverage(CFDictionaryRef item, bool skipLowest) {
+  int32_t n = IOReportStateGetCount(item);
+  if (n > PMP_MAX_BINS)
+    n = PMP_MAX_BINS;
+  double bins[PMP_MAX_BINS];
+  int64_t residency[PMP_MAX_BINS];
+  for (int32_t s = 0; s < n; s++) {
+    char buf[32] = {0};
+    CFStringRef name = IOReportStateGetNameForIndex(item, s);
+    if (name != NULL)
+      CFStringGetCString(name, buf, sizeof(buf), kCFStringEncodingUTF8);
+    bins[s] = atof(buf);
+    residency[s] = IOReportStateGetResidency(item, s);
+  }
+  return binWeightedAverage(bins, residency, n, skipLowest);
+}
+
+// Whole-machine power, first key that reads non-zero wins:
+//   PSTR  System Total. Laptops; reads 0 on Mac Studio.
+//   PDTR  DC-In total. Reads 0 on Mac Studio.
+//   PD0R  DC-In rail. The internal PSU's output on Mac Studio, so the
+//         whole board. Only reached when PSTR is 0, so laptops (where it
+//         would include battery charging) keep PSTR.
+static double readSystemPower(io_connect_t conn) {
+  static const char *keys[] = {"PSTR", "PDTR", "PD0R"};
+  for (size_t i = 0; i < sizeof(keys) / sizeof(keys[0]); i++) {
+    double w = SMCGetFloatValue(conn, keys[i]);
+    if (w > 0)
+      return w;
+  }
+  return 0;
+}
+
+// DRAM power from SMC "PZD1", "PZD2", ... (one per die), for when the
+// Energy Model DRAM counters are gated (macOS 27). On an M5 Max, PZD1 rose
+// from 1.8 W to 5.9 / 8.0 / 12.8 / 14.0 W with 1 / 2 / 4 / 8 memory-streaming
+// threads and stayed at 1.8 W under 12 compute-only threads. The key count is
+// probed once; keys are contiguous from 1.
+static double readDramPower(io_connect_t conn) {
+  static int keyCount = -1;
+  char key[5];
+  if (keyCount < 0) {
+    keyCount = 0;
+    for (int i = 1; i <= 8; i++) {
+      SMCKeyData_t val;
+      snprintf(key, sizeof(key), "PZD%d", i);
+      if (SMCReadKey(conn, key, &val) != kIOReturnSuccess)
+        break;
+      keyCount = i;
+    }
+  }
+  double watts = 0;
+  for (int i = 1; i <= keyCount; i++) {
+    snprintf(key, sizeof(key), "PZD%d", i);
+    watts += SMCGetFloatValue(conn, key);
+  }
+  return watts;
+}
+
 static void ensurePMPDramChannels(void) {
   if (g_pmp_channels_attempted || g_channels == NULL)
     return;
 
-  CFDictionaryRef pmpChan =
-      IOReportCopyChannelsInGroup(CFSTR("PMP"), NULL, 0, 0, 0);
+  CFDictionaryRef pmpChan = copyPMPChannels();
   if (pmpChan == NULL) {
     // No PMP group exists on this machine — permanent, mark attempted so we
     // don't probe every sample.
@@ -1067,7 +1170,8 @@ int initIOReport() {
   // channels) to reduce per-tick IPC cost. That meant the main subscription
   // never bound to the PMP ANE channels → ANE always appeared as zero.
   //
-  // Fix: pull in *only* the ANE-related PMP channels (filtered by name).
+  // Fix: pull in *only* the ANE-related PMP channels (filtered by name),
+  // plus the "Energy" CPU cluster histograms used for CPU power on M5.
   // This binds us to the correct IOReport data for ANE without the full PMP cost.
   // Skipped when ensurePMPDramChannels() already merged the full PMP group
   // above (A-series, and M5+ without direct AMC BW): merging the ANE channels
@@ -1075,29 +1179,33 @@ int initIOReport() {
   // samplePowerMetrics are duplicate-safe (max, not sum) either way — the
   // dynamic PMP fallback re-merge can still introduce duplicates later.
   if (!g_pmp_channels_attempted) {
-    CFDictionaryRef pmpAll = IOReportCopyChannelsInGroup(CFSTR("PMP"), NULL, 0, 0, 0);
+    CFDictionaryRef pmpAll = copyPMPChannels();
     if (pmpAll) {
       CFArrayRef pmpChs = CFDictionaryGetValue(pmpAll, CFSTR("IOReportChannels"));
       CFIndex pmpCnt = pmpChs ? CFArrayGetCount(pmpChs) : 0;
       if (pmpCnt > 0) {
-        CFMutableArrayRef aneChs = CFArrayCreateMutable(kCFAllocatorDefault, 0, &kCFTypeArrayCallBacks);
+        CFMutableArrayRef subsetChs = CFArrayCreateMutable(kCFAllocatorDefault, 0, &kCFTypeArrayCallBacks);
         for (CFIndex i = 0; i < pmpCnt; i++) {
           CFDictionaryRef ch = (CFDictionaryRef)CFArrayGetValueAtIndex(pmpChs, i);
           CFStringRef nm = IOReportChannelGetChannelName(ch);
+          CFStringRef sg = IOReportChannelGetSubGroup(ch);
           if (nm) {
             char buf[256] = {0};
+            char sbuf[64] = {0};
             CFStringGetCString(nm, buf, sizeof(buf), kCFStringEncodingUTF8);
-            if (strstr(buf, "ANE") != NULL || strstr(buf, "ane") != NULL) {
-              CFArrayAppendValue(aneChs, ch);
+            if (sg)
+              CFStringGetCString(sg, sbuf, sizeof(sbuf), kCFStringEncodingUTF8);
+            if (isAneChannelName(buf) || isPmpCpuPowerChannel(sbuf, buf)) {
+              CFArrayAppendValue(subsetChs, ch);
             }
           }
         }
-        CFIndex aneCnt = CFArrayGetCount(aneChs);
-        if (aneCnt > 0) {
-          CFMutableDictionaryRef anePmp = CFDictionaryCreateMutable(
+        CFIndex subsetCnt = CFArrayGetCount(subsetChs);
+        if (subsetCnt > 0) {
+          CFMutableDictionaryRef subsetPmp = CFDictionaryCreateMutable(
               kCFAllocatorDefault, 0,
               &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
-          CFDictionarySetValue(anePmp, CFSTR("IOReportChannels"), aneChs);
+          CFDictionarySetValue(subsetPmp, CFSTR("IOReportChannels"), subsetChs);
 
           // Merge into a COPY and only publish channels + subscription
           // together once the new subscription succeeds. Merging g_channels
@@ -1109,30 +1217,30 @@ int initIOReport() {
           // calibration thread that reads these globals exists. (The runtime
           // re-merge in ensurePMPDramChannels deliberately does NOT release
           // for that reason.)
-          CFMutableDictionaryRef aneMerged =
+          CFMutableDictionaryRef subsetMerged =
               CFDictionaryCreateMutableCopy(kCFAllocatorDefault, 0, g_channels);
-          if (aneMerged != NULL) {
-            IOReportMergeChannels((CFDictionaryRef)aneMerged, anePmp, NULL);
-            CFMutableDictionaryRef aneSubsystem = NULL;
+          if (subsetMerged != NULL) {
+            IOReportMergeChannels((CFDictionaryRef)subsetMerged, subsetPmp, NULL);
+            CFMutableDictionaryRef subsetSubsystem = NULL;
             IOReportSubscriptionRef newSub =
-                IOReportCreateSubscription(NULL, aneMerged, &aneSubsystem, 0, NULL);
+                IOReportCreateSubscription(NULL, subsetMerged, &subsetSubsystem, 0, NULL);
             if (newSub != NULL) {
               if (g_subscription != NULL) {
                 CFRelease(g_subscription);
               }
               CFRelease(g_channels);
-              g_channels = aneMerged;
+              g_channels = subsetMerged;
               g_subscription = newSub;
             } else {
-              CFRelease(aneMerged); // keep the working pre-merge pair
+              CFRelease(subsetMerged); // keep the working pre-merge pair
             }
-            if (aneSubsystem != NULL) {
-              CFRelease(aneSubsystem);
+            if (subsetSubsystem != NULL) {
+              CFRelease(subsetSubsystem);
             }
           }
-          CFRelease(anePmp);
+          CFRelease(subsetPmp);
         }
-        CFRelease(aneChs);
+        CFRelease(subsetChs);
       }
       CFRelease(pmpAll);
     }
@@ -1165,7 +1273,7 @@ void debugIOReport() {
     const char *groups[] = {
         "Energy Model",           "GPU Stats", "CPU Stats", "AMC Stats",
         "ODS",                    "Performance Statistics", "CLPC",
-        "PMP",                    NULL};
+        "PMP",                    "PMP0", "PMP1", NULL};
 
     for (int i = 0; groups[i] != NULL; i++) {
       CFStringRef groupStr = CFStringCreateWithCString(
@@ -1262,7 +1370,7 @@ void dumpIOReportDebug(void) {
   printf("--- IOReport Channel Groups ---\n");
   const char *groups[] = {
     "Energy Model", "GPU Stats", "CPU Stats", "AMC Stats",
-    "PMP", "CLPC", "ODS", "Performance Statistics",
+    "PMP", "PMP0", "PMP1", "CLPC", "ODS", "Performance Statistics",
     NULL
   };
   for (int i = 0; groups[i] != NULL; i++) {
@@ -1749,7 +1857,7 @@ static void printLiveEnergyContributors(int durationMs) {
   // they ever produce data) are the ones mactop's ANE %% is computed from:
   // active = time not in OFF/IDLE/DOWN/SLEEP/VMIN/F1/0%%.
   printf("\n--- PMP ANE channel scan (raw state residencies) ---\n");
-  CFDictionaryRef pmp = IOReportCopyChannelsInGroup(CFSTR("PMP"), NULL, 0, 0, 0);
+  CFDictionaryRef pmp = copyPMPChannels();
   if (pmp) {
     CFMutableDictionaryRef pmpCh = CFDictionaryCreateMutableCopy(kCFAllocatorDefault, CFDictionaryGetCount(pmp), pmp);
     CFRelease(pmp);
@@ -1778,17 +1886,13 @@ static void printLiveEnergyContributors(int durationMs) {
             char gbuf[64]={0}, nbuf[256]={0};
             CFStringGetCString(grp, gbuf, sizeof(gbuf), kCFStringEncodingUTF8);
             CFStringGetCString(nm, nbuf, sizeof(nbuf), kCFStringEncodingUTF8);
-            if (strcmp(gbuf, "PMP") != 0) continue;
-            if (strstr(nbuf, "ANE") == NULL && strstr(nbuf, "ane") == NULL) continue;
+            if (!isPMPGroup(gbuf)) continue;
+            if (!isAneChannelName(nbuf)) continue;
             CFStringRef subRef = IOReportChannelGetSubGroup(ch);
             char sub[64]={0};
             if (subRef) CFStringGetCString(subRef, sub, sizeof(sub), kCFStringEncodingUTF8);
-            bool isAneFloorChannel =
-                (strcmp(nbuf, "ANE-AF-BW") == 0 || strcmp(nbuf, "ANE-DCS-BW") == 0) &&
-                strstr(sub, "Floor") != NULL;
-            bool isAneEngineStateChannel = (strcmp(nbuf, "ANE0") == 0) &&
-              (strstr(sub, "Floor") != NULL || strstr(sub, "Fast-Die") != NULL ||
-               strstr(sub, "CE") != NULL || strstr(sub, "SOC") != NULL || strstr(sub, "Util") != NULL);
+            bool isAneFloorChannel = isAneFloorChannelName(nbuf, sub);
+            bool isAneEngineStateChannel = isAneEngineStateChannelName(nbuf, sub);
             CFStringRef uRef = IOReportChannelGetUnitLabel(ch);
             char ubuf[32]={0};
             if (uRef) CFStringGetCString(uRef, ubuf, sizeof(ubuf), kCFStringEncodingUTF8);
@@ -2994,6 +3098,10 @@ PowerMetrics samplePowerMetrics(int durationMs) {
   int64_t pmpAneCombinedBytes = 0; // combined "ANE RD+WR" (chips without split RD/WR)
   bool sawAnePmpActivity = false;  // any positive residency on ANE* PMP channels (macOS 27+)
   bool sawAneUtilChannel = false;  // a usable PMP ANE floor/util channel was present at all
+  PmpKeyedMax aneBw[PMP_KEYED_MAX];
+  int aneBwCount = 0;
+  PmpKeyedMax pmpCpu[PMP_KEYED_MAX];
+  int pmpCpuCount = 0;
 
   for (CFIndex i = 0; i < count; i++) {
     CFDictionaryRef item = (CFDictionaryRef)CFArrayGetValueAtIndex(channels, i);
@@ -3290,13 +3398,17 @@ PowerMetrics samplePowerMetrics(int durationMs) {
         amcRequestWriteBytes += val;
         hasAmcRequestBytes = 1;
       }
-    } else if (strcmp(grp, "PMP") == 0) {
+    } else if (isPMPGroup(grp)) {
       // PMP can provide DRAM bandwidth on systems where AMC Stats channels are
       // absent or do not produce delta data.
       char sub[64] = {0};
       CFStringRef subgroupRef = IOReportChannelGetSubGroup(item);
       if (subgroupRef != NULL) {
         CFStringGetCString(subgroupRef, sub, sizeof(sub), kCFStringEncodingUTF8);
+      }
+      if (isPmpCpuPowerChannel(sub, chn) && IOReportStateGetCount(item) > 1) {
+        pmpKeyedMaxRecord(pmpCpu, &pmpCpuCount, grp, chn,
+                          stateBinAverage(item, true), 0);
       }
       if (strcmp(sub, "DRAM BW") == 0) {
         int64_t val = IOReportSimpleGetIntegerValue(item, 0);
@@ -3339,12 +3451,8 @@ PowerMetrics samplePowerMetrics(int durationMs) {
         }
         int32_t stateCount = IOReportStateGetCount(item);
 
-        bool isAneFloorChannel =
-            (strcmp(chn, "ANE-AF-BW") == 0 || strcmp(chn, "ANE-DCS-BW") == 0) &&
-            strstr(sub, "Floor") != NULL;
-        bool isAneEngineStateChannel = (strcmp(chn, "ANE0") == 0) &&
-          (strstr(sub, "Floor") != NULL || strstr(sub, "Fast-Die") != NULL ||
-           strstr(sub, "CE") != NULL || strstr(sub, "SOC") != NULL || strstr(sub, "Util") != NULL);
+        bool isAneFloorChannel = isAneFloorChannelName(chn, sub);
+        bool isAneEngineStateChannel = isAneEngineStateChannelName(chn, sub);
 
         // Utilization %: time NOT spent in the idle/floor state, from actual
         // residency deltas. Idle states: OFF/IDLE/DOWN/SLEEP plus the lowest
@@ -3394,20 +3502,8 @@ PowerMetrics samplePowerMetrics(int durationMs) {
         // under full Foundation Models load — handle it as the combined total.
         if (stateCount > 1 && strcmp(sub, "AF BW") == 0 &&
             (strstr(chn, "RD") != NULL || strstr(chn, "WR") != NULL)) {
-          int64_t tot = 0;
-          double weighted = 0;
-          for (int32_t s = 0; s < stateCount; s++) {
-            int64_t residency = IOReportStateGetResidency(item, s);
-            tot += residency;
-            CFStringRef stateName = IOReportStateGetNameForIndex(item, s);
-            if (stateName != NULL && residency > 0) {
-              char sn[64] = {0};
-              CFStringGetCString(stateName, sn, sizeof(sn), kCFStringEncodingUTF8);
-              weighted += atof(sn) * (double)residency; // "32GB/s" -> 32.0
-            }
-          }
-          if (tot > 0) {
-            double avgGBs = weighted / (double)tot;
+          double avgGBs = stateBinAverage(item, false);
+          if (avgGBs > 0) {
             // Scale by the measured sample window (actualDurationNs), not the
             // requested durationMs: Go divides these bytes by the measured
             // window to recover GB/s, so using the same interval here makes
@@ -3417,22 +3513,24 @@ PowerMetrics samplePowerMetrics(int durationMs) {
                                    ? (double)metrics.actualDurationNs / 1e9
                                    : (double)durationMs / 1000.0;
             int64_t bytes = (int64_t)(avgGBs * 1e9 * sampleSec);
-            // max, not +=: a channel may appear more than once in a merged
-            // subscription — summing would double count. "RD+WR" is the
-            // combined total (kept apart so it isn't mistaken for read-only).
-            if (strstr(chn, "RD+WR") != NULL || strstr(chn, "RW") != NULL) {
-              if (bytes > pmpAneCombinedBytes) pmpAneCombinedBytes = bytes;
-            } else if (strstr(chn, "RD") != NULL) {
-              if (bytes > pmpAneReadBytes) pmpAneReadBytes = bytes;
-            } else {
-              if (bytes > pmpAneWriteBytes) pmpAneWriteBytes = bytes;
-            }
+            // Single-die chips have one channel per direction; Ultra has one
+            // per die and link ("ANE0 L0 RD", "ANE1 L1 RD", ...), which sum.
+            // A channel may also appear more than once in a merged
+            // subscription, so keep the max per distinct group/name.
+            // "RD+WR" is the combined total (kept apart so it isn't mistaken
+            // for read-only).
+            pmpKeyedMaxRecord(aneBw, &aneBwCount, grp, chn, (double)bytes,
+                              aneBwKind(chn));
             sawAnePmpActivity = true;
           }
         }
       }
     }
   }
+  pmpAneReadBytes += (int64_t)pmpKeyedMaxSum(aneBw, aneBwCount, ANE_BW_READ);
+  pmpAneWriteBytes += (int64_t)pmpKeyedMaxSum(aneBw, aneBwCount, ANE_BW_WRITE);
+  pmpAneCombinedBytes +=
+      (int64_t)pmpKeyedMaxSum(aneBw, aneBwCount, ANE_BW_COMBINED);
 
   // Post-loop: assign accumulated CPU cluster metrics to final metrics.
   // On M5+ chips (mClusterCount > 0): MCPU = Performance (pCluster), PCPU = Super (sCluster).
@@ -3464,6 +3562,17 @@ PowerMetrics samplePowerMetrics(int durationMs) {
   // Prefer whole-CPU energy totals; fall back to the sum of cluster-type
   // channels when only those exist (newer chip/OS naming generations).
   metrics.cpuPower = (cpuTotalEnergyW > 0) ? cpuTotalEnergyW : cpuTypedEnergyW;
+  // macOS 27 gates the Energy Model CPU counters: they read 0, and only
+  // advance while an entitled sampler (powermetrics, Activity Monitor) runs,
+  // over partial windows. The first sample that reads 0 while the PMP
+  // per-cluster histograms show CPU power latches the PMP source for good,
+  // so CPU watts don't flap between the two. Where the counters work they
+  // never read 0 under load, so the latch never trips.
+  double pmpCpuW = pmpKeyedMaxSum(pmpCpu, pmpCpuCount, 0);
+  if (metrics.cpuPower <= 0 && pmpCpuW > 0)
+    g_energyModelCpuGated = true;
+  if (g_energyModelCpuGated)
+    metrics.cpuPower = pmpCpuW;
   // GPU: "GPU Energy" is the canonical channel; the bare "GPU" alias is used
   // only when the canonical one produced nothing.
   metrics.gpuPower += (gpuEnergyNamedW > 0) ? gpuEnergyNamedW : gpuEnergyAliasW;
@@ -3471,6 +3580,15 @@ PowerMetrics samplePowerMetrics(int durationMs) {
   // aggregate "... Energy" aliases apply only when no block produced data.
   metrics.anePower += (aneBlockEnergyW > 0) ? aneBlockEnergyW : aneNamedEnergyW;
   metrics.dramPower += (dramBlockEnergyW > 0) ? dramBlockEnergyW : dramNamedEnergyW;
+  // Same gating as the CPU counters above: latch the SMC DRAM keys on the
+  // first sample where the Energy Model reads 0 but SMC shows DRAM power.
+  if (g_smcConn) {
+    double smcDramW = readDramPower(g_smcConn);
+    if (metrics.dramPower <= 0 && smcDramW > 0)
+      g_energyModelDramGated = true;
+    if (g_energyModelDramGated)
+      metrics.dramPower = smcDramW;
+  }
 
   if (hasAmcExactDcsDirectional) {
     metrics.dramReadBytes = amcExactDcsReadBytes;
@@ -3648,7 +3766,7 @@ PowerMetrics samplePowerMetrics(int durationMs) {
   // This avoids a redundant HID service enumeration on systems where HID provides good data.
 
   if (g_smcConn) {
-    metrics.systemPower = SMCGetFloatValue(g_smcConn, "PSTR");
+    metrics.systemPower = readSystemPower(g_smcConn);
   }
 
   // Read fan data

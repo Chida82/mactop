@@ -647,7 +647,7 @@ Contributions are what make the open-source community such an amazing place to l
 
 ## What does mactop use to get real-time data?
 
-- **Apple SMC**: For SoC temperature sensors, System Power (PSTR), fan speed monitoring (FNum, F*Ac/Mn/Mx/Tg/Md), fan speed control via SMCWrite, and comprehensive temperature sensor enumeration
+- **Apple SMC**: For SoC temperature sensors, System Power (PSTR, or the DC-in keys PDTR/PD0R on desktops where PSTR reads 0), fan speed monitoring (FNum, F*Ac/Mn/Mx/Tg/Md), fan speed control via SMCWrite, and comprehensive temperature sensor enumeration
 - **IOReport API**: For CPU, GPU, ANE, and DRAM power consumption (no sudo required) — DRAM power is also used for auto-calibrated bandwidth estimation on M5+ chips
 - **IOKit**: For GPU frequency table from `pmgr` device
 - **IOHIDEventSystemClient**: Fallback for SoC temperature sensors
