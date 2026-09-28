@@ -1911,7 +1911,7 @@ static void printLiveEnergyContributors(int durationMs) {
                   CFStringGetCString(sn, snb, sizeof(snb), kCFStringEncodingUTF8);
                   if (strcmp(snb, "OFF") != 0 && strcmp(snb, "IDLE") != 0 &&
                       strcmp(snb, "DOWN") != 0 && strcmp(snb, "SLEEP") != 0 &&
-                      strcmp(snb, "VMIN") != 0 && strcmp(snb, "F1") != 0 &&
+                      strcmp(snb, "VMIN") != 0 && strcmp(snb, "F1") != 0 && strcmp(snb, "F2") != 0 &&
                       strcmp(snb, "0%") != 0) {
                     act += r;
                   }
@@ -3456,7 +3456,7 @@ PowerMetrics samplePowerMetrics(int durationMs) {
 
         // Utilization %: time NOT spent in the idle/floor state, from actual
         // residency deltas. Idle states: OFF/IDLE/DOWN/SLEEP plus the lowest
-        // floor request (VMIN for SOC Floor, F1 for DCS Floor, 0% for Fast-Die CE).
+        // floor request (VMIN for SOC Floor, F1 for DCS Floor — F2 on M6 — 0% for Fast-Die CE).
         if (stateCount > 1 && (isAneFloorChannel || isAneEngineStateChannel)) {
           sawAneUtilChannel = true; // PMP exposes a real ANE util signal here
           int64_t totalTime = 0;
@@ -3470,7 +3470,7 @@ PowerMetrics samplePowerMetrics(int durationMs) {
               CFStringGetCString(stateName, sn, sizeof(sn), kCFStringEncodingUTF8);
               if (strcmp(sn, "OFF") != 0 && strcmp(sn, "IDLE") != 0 &&
                   strcmp(sn, "DOWN") != 0 && strcmp(sn, "SLEEP") != 0 &&
-                  strcmp(sn, "VMIN") != 0 && strcmp(sn, "F1") != 0 &&
+                  strcmp(sn, "VMIN") != 0 && strcmp(sn, "F1") != 0 && strcmp(sn, "F2") != 0 &&
                   strcmp(sn, "0%") != 0) {
                 activeTime += residency;
               }
