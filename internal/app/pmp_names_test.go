@@ -115,6 +115,29 @@ func TestPmpCPUPowerChannel(t *testing.T) {
 	}
 }
 
+func TestAmccDcsBwChannel(t *testing.T) {
+	cases := []struct {
+		sub, chn string
+		want     bool
+	}{
+		{"DCS BW", "AMCC RD+WR", true}, // M4 Pro/Max: preferred combined source
+		{"DCS BW", "AMCC RD", true},
+		{"DCS BW", "AMCC WR", true},
+		{"DCS BW", "PACC0 RD", false}, // agent histogram, not the aggregate
+		{"DCS BW", "EACC0 WR", false},
+		{"DCS BW", "AGX RD+WR", false},
+		{"DCS BW", "AMCC", false}, // needs the trailing space + direction
+		{"DCS Floor", "AMCC RD", false},
+		{"DRAM BW", "AMCC RD", false},
+		{"", "", false},
+	}
+	for _, c := range cases {
+		if got := pmpIsAmccDcsBwChannel(c.sub, c.chn); got != c.want {
+			t.Errorf("isAmccDcsBwChannel(%q, %q) = %v, want %v", c.sub, c.chn, got, c.want)
+		}
+	}
+}
+
 func TestBinWeightedAverage(t *testing.T) {
 	near := func(a, b float64) bool { return math.Abs(a-b) < 1e-9 }
 

@@ -33,6 +33,10 @@ func pmpIsCPUPowerChannel(sub, chn string) bool {
 	return withCStrings(sub, chn, func(a, b *C.char) C.bool { return C.isPmpCpuPowerChannel(a, b) })
 }
 
+func pmpIsAmccDcsBwChannel(sub, chn string) bool {
+	return withCStrings(sub, chn, func(a, b *C.char) C.bool { return C.isAmccDcsBwChannel(a, b) })
+}
+
 func pmpAneBwKind(chn string) int {
 	c := C.CString(chn)
 	defer C.free(unsafe.Pointer(c))

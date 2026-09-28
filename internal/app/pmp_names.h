@@ -85,6 +85,15 @@ static inline bool isPmpCpuPowerChannel(const char *sub, const char *chn) {
   return *p == '\0' || strcmp(p, " SRAM") == 0;
 }
 
+// M4 Pro/Max DRAM bandwidth: PMP "DCS BW" / "AMCC RD", "AMCC WR" and
+// "AMCC RD+WR" are 32-bucket rate histograms, not byte accumulators. The
+// agent histograms in the same subgroup ("PACC0", "EACC0", "AGX", ...) must
+// be skipped: AMCC is the memory-controller aggregate, so summing agents
+// double-counts.
+static inline bool isAmccDcsBwChannel(const char *sub, const char *chn) {
+  return strcmp(sub, "DCS BW") == 0 && strncmp(chn, "AMCC ", 5) == 0;
+}
+
 // Residency-weighted average of histogram bins, each read at its label
 // ("12GB/s" -> 12, "2W" -> 2). With skipLowest the first bin reads as 0:
 // an idle, power-gated CPU cluster sits in "2W" all the time, and reading
