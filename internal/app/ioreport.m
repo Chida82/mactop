@@ -812,21 +812,33 @@ static double stateBinAverage(CFDictionaryRef item, bool skipLowest) {
   return binWeightedAverage(bins, residency, n, skipLowest);
 }
 
+// No Apple Silicon Mac draws anywhere near 1 kW, so a power reading above this
+// is a decode artifact rather than a measurement. SMCGetFloatValue is a
+// generic decoder: on a key reporting a bare ui8/ui16/ui32 type it returns the
+// raw count as if it were the value, which is how a count in the tens of
+// thousands reaches PackageW as a 20-60 kW reading. See issue #94.
+static const double kMaxPlausiblePowerWatts = 1000.0;
+
 // Whole-machine power, first key that reads non-zero wins:
 //   PSTR  System Total. Laptops; reads 0 on Mac Studio.
 //   PDTR  DC-In total. Reads 0 on Mac Studio.
 //   PD0R  DC-In rail. The internal PSU's output on Mac Studio, so the
 //         whole board. Only reached when PSTR is 0, so laptops (where it
 //         would include battery charging) keep PSTR.
+//
+// Keys whose declared type carries an implicitly-scaled engineering value
+// (flt, or fpXY/spXY fixed point) are preferred over bare-integer types, so
+// one mis-typed key cannot shadow a good one later in the chain. The
+// untyped pass runs only if no scaled key qualified, so a Mac that encodes
+// watts as an integer still reports power.
 static double readSystemPower(io_connect_t conn) {
   static const char *keys[] = {"PSTR", "PDTR", "PD0R"};
-  const double maxPlausibleWatts = 1000.0;
   for (int scaledOnly = 1; scaledOnly >= 0; scaledOnly--) {
     for (size_t i = 0; i < sizeof(keys) / sizeof(keys[0]); i++) {
       if (scaledOnly && !SMCKeyTypeIsScaled(conn, keys[i]))
         continue;
       double w = SMCGetFloatValue(conn, keys[i]);
-      if (w > 0 && w <= maxPlausibleWatts)
+      if (w > 0 && w <= kMaxPlausiblePowerWatts)
         return w;
     }
   }
@@ -838,6 +850,9 @@ static double readSystemPower(io_connect_t conn) {
 // from 1.8 W to 5.9 / 8.0 / 12.8 / 14.0 W with 1 / 2 / 4 / 8 memory-streaming
 // threads and stayed at 1.8 W under 12 compute-only threads. The key count is
 // probed once; keys are contiguous from 1.
+//
+// Same decode hazard as readSystemPower: a bare-integer PZD key would add its
+// raw count straight into the DRAM total. Only scaled-typed keys are summed.
 static double readDramPower(io_connect_t conn) {
   static int keyCount = -1;
   char key[5];
@@ -854,7 +869,11 @@ static double readDramPower(io_connect_t conn) {
   double watts = 0;
   for (int i = 1; i <= keyCount; i++) {
     snprintf(key, sizeof(key), "PZD%d", i);
-    watts += SMCGetFloatValue(conn, key);
+    if (!SMCKeyTypeIsScaled(conn, key))
+      continue;
+    double w = SMCGetFloatValue(conn, key);
+    if (w > 0 && w <= kMaxPlausiblePowerWatts)
+      watts += w;
   }
   return watts;
 }
