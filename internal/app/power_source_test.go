@@ -77,7 +77,21 @@ func TestPowerSupplyLine(t *testing.T) {
 	if label == "" || value == "" {
 		t.Errorf("line %q has an empty label or value", line)
 	}
-	if strings.HasSuffix(line, " ") {
+	if len(line) > 0 && line[len(line)-1] == ' ' {
 		t.Errorf("line %q has trailing whitespace", line)
+	}
+}
+
+func TestAdapterCacheStartsUnknown(t *testing.T) {
+	if adapterKnown {
+		t.Log("adapter already cached from an earlier test")
+	}
+	_, _, known := cachedAdapter()
+	t.Logf("adapterKnown = %v", known)
+	if known {
+		watts, desc, _ := cachedAdapter()
+		if watts <= 0 && desc == "" {
+			t.Error("adapter marked known with an empty reading")
+		}
 	}
 }

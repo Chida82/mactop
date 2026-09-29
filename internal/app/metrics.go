@@ -749,7 +749,10 @@ func collectProcessMetrics(done chan struct{}, processMetricsChan chan []Process
 				stderrLogger.Printf("Error getting process list: %v\n", err)
 			}
 
-			if !shouldCollectPorts() {
+			renderMutex.Lock()
+			collectPorts := shouldCollectPorts()
+			renderMutex.Unlock()
+			if !collectPorts {
 				continue
 			}
 			if ports, err := collectListeningPorts(); err == nil {

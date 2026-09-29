@@ -122,47 +122,56 @@ func (p PowerSupply) Rated() bool {
 }
 
 var (
-	adapterOnce     sync.Once
-	adapterWatts    int
-	adapterDesc     string
-	adapterReadable bool
+	adapterMu    sync.Mutex
+	adapterWatts int
+	adapterDesc  string
+	adapterKnown bool
 )
 
-// GetPowerSupply returns the current power source. The adapter rating is read
-// once and cached: it cannot change without unplugging the supply, and the
-// registry round-trip is not worth paying every sample. The live state — which
-// source is providing power, and whether a supply is attached — is re-read on
-// every call.
-func GetPowerSupply() PowerSupply {
-	adapterOnce.Do(func() {
-		var watts C.longlong
-		desc := make([]C.char, 64)
-		C.mactop_read_adapter(&watts, &desc[0], C.int(len(desc)))
-		adapterWatts = int(watts)
-		adapterDesc = C.GoString(&desc[0])
-		adapterReadable = adapterWatts > 0 || adapterDesc != ""
-	})
+func readAdapterDetails() (int, string) {
+	var watts C.longlong
+	desc := make([]C.char, 64)
+	C.mactop_read_adapter(&watts, &desc[0], C.int(len(desc)))
+	return int(watts), C.GoString(&desc[0])
+}
 
+func cachedAdapter() (int, string, bool) {
+	adapterMu.Lock()
+	defer adapterMu.Unlock()
+	return adapterWatts, adapterDesc, adapterKnown
+}
+
+func cacheAdapter(watts int, desc string) {
+	adapterMu.Lock()
+	defer adapterMu.Unlock()
+	adapterWatts, adapterDesc, adapterKnown = watts, desc, true
+}
+
+func GetPowerSupply() PowerSupply {
 	sourceBuf := make([]C.char, 64)
 	source := ""
 	if C.mactop_read_source_type(&sourceBuf[0], C.int(len(sourceBuf))) != 0 {
 		source = C.GoString(&sourceBuf[0])
 	}
+	connected := C.mactop_read_external_connected() != 0
+
+	watts, desc, known := cachedAdapter()
+	if !known && connected {
+		watts, desc = readAdapterDetails()
+		if watts > 0 || desc != "" {
+			cacheAdapter(watts, desc)
+		}
+	}
 
 	supply := PowerSupply{
 		OnACPower:          strings.EqualFold(source, "AC Power"),
-		AdapterConnected:   C.mactop_read_external_connected() != 0,
-		AdapterWatts:       adapterWatts,
-		AdapterDescription: adapterDesc,
+		AdapterConnected:   connected,
+		AdapterWatts:       watts,
+		AdapterDescription: desc,
 		Source:             source,
 	}
-
 	if !supply.OnACPower && supply.AdapterConnected {
 		supply.OnACPower = true
-	}
-	if !adapterReadable {
-		supply.AdapterWatts = 0
-		supply.AdapterDescription = ""
 	}
 	return supply
 }
