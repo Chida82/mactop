@@ -136,10 +136,6 @@ type FanInfo struct {
 	TargetRPM int    `json:"target_rpm"`
 	Mode      int    `json:"mode"` // 0=auto, 1=forced
 
-	// TachReadable is false when the SMC floor for this fan is above zero, so
-	// the fan cannot be stopped, yet the actual-RPM key reported 0. The 0 is
-	// then an absent tach value rather than a measurement, and consumers should
-	// show the reading as unavailable instead of "0 RPM". See issue #78.
 	TachReadable bool `json:"tach_readable"`
 }
 

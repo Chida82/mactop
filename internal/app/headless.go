@@ -427,9 +427,6 @@ func processHeadlessSample(format string, tbInfo *ThunderboltOutput, sysInfo Sys
 		}
 		record = append(record, batPresent, batPercent, batCharging, batState)
 
-		// Power supply columns are always populated: a battery-less Mac still
-		// reports its source, and an unrated adapter yields an empty wattage
-		// rather than a misleading 0.
 		var acPower, adapterConnected, adapterWatts, adapterDesc, supplySource string
 		if output.PowerSupply != nil {
 			acPower = fmt.Sprintf("%t", output.PowerSupply.OnACPower)
@@ -669,9 +666,6 @@ func collectHeadlessData(tbInfo *ThunderboltOutput, sysInfo SystemInfo) Headless
 	if bat := GetBatteryInfo(); bat.Present {
 		output.Battery = &bat
 	}
-	// Emitted unconditionally: on a battery-less Mac the source is still
-	// meaningful (a Studio reports AC with no adapter rating), and consumers
-	// need to tell "no external supply" apart from "supply, rating unknown".
 	supply := GetPowerSupply()
 	output.PowerSupply = &supply
 	if sysInfo.ECoreCount > 0 {

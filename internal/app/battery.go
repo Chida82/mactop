@@ -202,10 +202,6 @@ func formatBatteryLine() string {
 	return fmt.Sprintf("%s: %d%% (%s)", i18n.T("Info_Battery"), *bat.Percent, stateLabel)
 }
 
-// powerSupplyLine renders the supply state for the power panel: the rating when
-// the hardware publishes one, the source otherwise, and an empty string on a
-// battery-less Mac whose supply is internal. Nothing here is per-model — the
-// wattage is whatever the attached supply reports.
 func powerSupplyLine() string {
 	supply := GetPowerSupply()
 	switch {

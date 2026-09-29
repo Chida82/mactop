@@ -88,36 +88,18 @@ import (
 	"time"
 )
 
-// PowerSupply describes where the machine draws power from and what the
-// attached supply is rated for. Every field is read from the running system, so
-// a laptop on a 30 W adapter, a laptop on a 140 W adapter, and a desktop whose
-// supply is internal are each reported from their own hardware, with no
-// per-model table.
 type PowerSupply struct {
-	// OnACPower is true when the system draws from an external supply rather
-	// than its internal battery. It stays true on battery-less Macs.
 	OnACPower bool `json:"on_ac_power" yaml:"on_ac_power" xml:"OnACPower" toon:"on_ac_power"`
 
-	// AdapterConnected reports that an external supply is plugged in. It is
-	// false on a desktop with an internal supply, and on a laptop unplugged.
 	AdapterConnected bool `json:"adapter_connected" yaml:"adapter_connected" xml:"AdapterConnected" toon:"adapter_connected"`
 
-	// AdapterWatts is the supply's rated output in watts, 0 when the hardware
-	// publishes no rating. This is the figure
-	// `system_profiler SPPowerDataType | grep Watt` prints.
 	AdapterWatts int `json:"adapter_watts" yaml:"adapter_watts" xml:"AdapterWatts" toon:"adapter_watts"`
 
-	// AdapterDescription names the supply, e.g. "pd charger". Empty when the
-	// hardware does not name it.
 	AdapterDescription string `json:"adapter_description,omitempty" yaml:"adapter_description,omitempty" xml:"AdapterDescription,omitempty" toon:"adapter_description"`
 
-	// Source is IOKit's raw power-source type, e.g. "AC Power" or
-	// "Battery Power". Empty when IOKit reports nothing.
 	Source string `json:"source,omitempty" yaml:"source,omitempty" xml:"Source,omitempty" toon:"source"`
 }
 
-// Rated reports that an external supply is present and its rating is known,
-// which is the condition for rendering a wattage figure.
 func (p PowerSupply) Rated() bool {
 	return p.AdapterConnected && p.AdapterWatts > 0
 }
@@ -184,12 +166,6 @@ func readPowerSupplyUncached() PowerSupply {
 	return supply
 }
 
-// GetPowerSupply caches the whole reading. Each IOKit round trip costs ~730 us
-// (measured, p99 1.4 ms), and the render path calls this twice per sample under
-// renderMutex, where the drain is a non-blocking select that silently drops a
-// sample it cannot keep up with. Caching keeps that cost off the frame budget.
-// The TTL has to exceed the default 1 s update interval, or the cache would
-// still be re-read on every single tick.
 func GetPowerSupply() PowerSupply {
 	powerSupplyMu.Lock()
 	defer powerSupplyMu.Unlock()

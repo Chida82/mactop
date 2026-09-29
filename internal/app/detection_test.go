@@ -97,9 +97,6 @@ func TestLightModeOverride(t *testing.T) {
 	}
 }
 
-// readOSCResponse must give up on a silent fd rather than block: detectLightMode
-// runs before tcell claims stdin, so a blocking read here hangs startup on a
-// terminal that ignores OSC 11.
 func TestReadOSCResponseTimesOutOnSilentFD(t *testing.T) {
 	r, w, err := os.Pipe()
 	if err != nil {
@@ -117,9 +114,6 @@ func TestReadOSCResponseTimesOutOnSilentFD(t *testing.T) {
 	}
 }
 
-// The response must be consumed exactly, with no read-ahead. tcell opens its
-// own reader on this fd straight afterwards, and any surplus byte it finds is a
-// keystroke it will draw as garbage — the #90 symptom.
 func TestReadOSCResponseConsumesExactlyTheResponse(t *testing.T) {
 	r, w, err := os.Pipe()
 	if err != nil {
@@ -168,9 +162,6 @@ func TestReadOSCResponseStopsAtTerminator(t *testing.T) {
 	}
 }
 
-// The #90 failure mode was a goroutine left blocked on stdin competing with
-// tcell for the same fd. This pins the property that matters: repeated timed-out
-// reads must not accumulate goroutines.
 func TestReadOSCResponseLeavesNoGoroutineBehind(t *testing.T) {
 	r, w, err := os.Pipe()
 	if err != nil {
@@ -191,8 +182,6 @@ func TestReadOSCResponseLeavesNoGoroutineBehind(t *testing.T) {
 	}
 }
 
-// drainAvailable reports how many bytes are still queued on fd, which is how the
-// tests above detect a read-ahead surplus.
 func drainAvailable(fd int) int {
 	fds := []unix.PollFd{{Fd: int32(fd), Events: unix.POLLIN}}
 	n, err := unix.Poll(fds, 30)

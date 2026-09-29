@@ -147,8 +147,6 @@ func buildInfoLines(themeColor string) []string {
 		infoLines = append(infoLines, formatLine(i18n.T("Info_Battery"), fmt.Sprintf(i18n.T("Info_BatteryValue"), *bat.Percent, batteryStateLabel(bat))))
 	}
 
-	// Reported on battery-less Macs too, where it is the only indication of
-	// where power comes from.
 	if line := powerSupplyLine(); line != "" {
 		label, value, found := strings.Cut(line, ": ")
 		if found {

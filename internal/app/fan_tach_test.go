@@ -8,16 +8,10 @@ import (
 
 var gotuiTag = regexp.MustCompile(`\]\([^)]*\)`)
 
-// plainFanLine strips gotui markup so a rendered fan line can be asserted on
-// the visible text rather than the colour tags around it.
 func plainFanLine(rendered string) string {
 	return strings.NewReplacer("[", "", "]", "").Replace(gotuiTag.ReplaceAllString(rendered, ""))
 }
 
-// The M2 Ultra signature from issue #78: the SMC reports a non-zero floor for the
-// fan, so it cannot physically be stopped, yet the actual-RPM key decodes
-// cleanly and returns 0. That 0 is an absent tach value, not a measurement, and
-// must never be rendered as one.
 func m2UltraFan() FanInfo {
 	return FanInfo{
 		ID: 0, Name: "Fan 0",
@@ -41,7 +35,6 @@ func TestFanRPMBarShowsNotAvailableWhenTachUnreadable(t *testing.T) {
 	}
 	head := lines[0]
 
-	// Strip the gotui markup, leaving "Fan 0  <bar> N/A / 3500 RPM  Auto".
 	plain := plainFanLine(head)
 	actual, rest, found := strings.Cut(plain, " / ")
 	if !found {
@@ -91,8 +84,6 @@ func TestBuildHeadlessFansCarriesTachReadable(t *testing.T) {
 	}
 }
 
-// TestLiveFansHaveReadableTach guards the heuristic against firing on hardware
-// that works: this rule must not turn a real reading into "unavailable".
 func TestLiveFansHaveReadableTach(t *testing.T) {
 	fans := GetFanList()
 	if len(fans) == 0 {

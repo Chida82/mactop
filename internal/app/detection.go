@@ -12,12 +12,6 @@ import (
 	"golang.org/x/term"
 )
 
-// The OSC 11 query runs before tcell claims stdin, so its reader must never
-// outlive the query. An earlier goroutine + timeout left a blocked, read-ahead
-// reader competing with tcell for the same fd, stealing its first keystrokes
-// and drawing them as garbage (#90). poll(2) with a deadline gives one
-// cancellable, non-read-ahead read, so there is nothing left behind.
-
 const (
 	lightModeQueryTimeout = 150 * time.Millisecond
 	lightModeMaxResponse  = 128
@@ -39,9 +33,6 @@ func detectLightMode() bool {
 	return false
 }
 
-// lightModeOverride lets a user pin the answer when detection picks the wrong
-// side, which the env chain mirrors: MACTOP_LIGHT_MODE, then the app's own
-// MACTOP_ prefix convention.
 func lightModeOverride() (bool, bool) {
 	for _, name := range []string{"MACTOP_LIGHT_MODE", "MACTOP_FORCE_LIGHT"} {
 		switch strings.ToLower(strings.TrimSpace(os.Getenv(name))) {
@@ -77,9 +68,6 @@ func checkTerminalColorOSC11() (bool, error) {
 	return parseOSC11Response(resp)
 }
 
-// readOSCResponse reads until the BEL or ST terminator, giving up after
-// timeout. It never buffers beyond the response, so the fd is left with only
-// the bytes the terminal actually sent for this query.
 func readOSCResponse(fd int, timeout time.Duration) (string, error) {
 	deadline := time.Now().Add(timeout)
 	var response []byte

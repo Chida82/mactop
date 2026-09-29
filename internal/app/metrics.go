@@ -712,9 +712,6 @@ func collectMetrics(done chan struct{}, cpumetricsChan chan CPUMetrics, gpumetri
 
 func updatePrometheusSensors(fans []FanInfo, sensors []TempSensor) {
 	for _, fan := range fans {
-		// -1 is the "tach not readable" sentinel, so a 0 from a machine that
-		// does not expose its tach (issue #78) cannot be mistaken for a
-		// stopped fan. Matches the mactop_battery_percent convention.
 		if fan.TachReadable {
 			fanRPM.With(prometheus.Labels{"fan_id": fmt.Sprintf("%d", fan.ID), "fan_name": fan.Name}).Set(float64(fan.ActualRPM))
 		} else {
