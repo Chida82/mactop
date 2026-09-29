@@ -62,6 +62,9 @@ func handleFlag(arg string, idx int, args []string) (int, string, int, bool, boo
 		fmt.Println(i18n.T("CLI_DumpingIOReport"))
 		DebugIOReport()
 		os.Exit(0)
+	case "--dump-smc-power":
+		DumpSMCPowerKeys()
+		os.Exit(0)
 	}
 	return emptyResult(idx).values()
 }

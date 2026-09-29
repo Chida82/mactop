@@ -14,6 +14,31 @@ static int SMCIsType(unsigned int dataType, const char *type) {
   return dataType == SMCFourCC(type);
 }
 
+static void SMCTypeString(unsigned int dataType, char *out) {
+  out[0] = (char)((dataType >> 24) & 0xff);
+  out[1] = (char)((dataType >> 16) & 0xff);
+  out[2] = (char)((dataType >> 8) & 0xff);
+  out[3] = (char)(dataType & 0xff);
+  out[4] = '\0';
+}
+
+static int SMCTypeIsScaled(unsigned int dataType) {
+  char t[5] = {0};
+  SMCTypeString(dataType, t);
+  if (strcmp(t, "flt ") == 0)
+    return 1;
+  if (t[1] != 'p' || (t[0] != 'f' && t[0] != 's'))
+    return 0;
+  int frac = -1;
+  if (t[3] >= '0' && t[3] <= '9')
+    frac = t[3] - '0';
+  else if (t[3] >= 'a' && t[3] <= 'f')
+    frac = t[3] - 'a' + 10;
+  else if (t[3] >= 'A' && t[3] <= 'F')
+    frac = t[3] - 'A' + 10;
+  return frac >= 0 && frac <= 16;
+}
+
 io_connect_t SMCOpen(void) {
   kern_return_t result;
   io_iterator_t iterator;
@@ -163,6 +188,29 @@ double SMCGetFloatValue(io_connect_t conn, const char *key) {
   }
 
   return 0.0;
+}
+
+int SMCKeyTypeIsScaled(io_connect_t conn, const char *key) {
+  SMCKeyData_keyInfo_t keyInfo;
+  if (conn == 0 || key == NULL)
+    return 0;
+  if (SMCGetKeyInfo(conn, key, &keyInfo) != kIOReturnSuccess)
+    return 0;
+  return SMCTypeIsScaled(keyInfo.dataType);
+}
+
+kern_return_t SMCGetKeyTypeString(io_connect_t conn, const char *key, char *out,
+                                  unsigned int outLen) {
+  SMCKeyData_keyInfo_t keyInfo;
+  if (out == NULL || outLen < 5)
+    return kIOReturnBadArgument;
+  out[0] = '\0';
+  if (conn == 0 || key == NULL)
+    return kIOReturnError;
+  if (SMCGetKeyInfo(conn, key, &keyInfo) != kIOReturnSuccess)
+    return kIOReturnError;
+  SMCTypeString(keyInfo.dataType, out);
+  return kIOReturnSuccess;
 }
 
 int SMCGetKeyCount(io_connect_t conn) {

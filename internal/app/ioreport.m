@@ -821,10 +821,14 @@ static double stateBinAverage(CFDictionaryRef item, bool skipLowest) {
 static double readSystemPower(io_connect_t conn) {
   static const char *keys[] = {"PSTR", "PDTR", "PD0R"};
   const double maxPlausibleWatts = 1000.0;
-  for (size_t i = 0; i < sizeof(keys) / sizeof(keys[0]); i++) {
-    double w = SMCGetFloatValue(conn, keys[i]);
-    if (w > 0 && w <= maxPlausibleWatts)
-      return w;
+  for (int scaledOnly = 1; scaledOnly >= 0; scaledOnly--) {
+    for (size_t i = 0; i < sizeof(keys) / sizeof(keys[0]); i++) {
+      if (scaledOnly && !SMCKeyTypeIsScaled(conn, keys[i]))
+        continue;
+      double w = SMCGetFloatValue(conn, keys[i]);
+      if (w > 0 && w <= maxPlausibleWatts)
+        return w;
+    }
   }
   return 0;
 }
@@ -2320,6 +2324,61 @@ static void dumpSMCFanCandidates(void) {
     }
     printf("  %-4s  type=%-4s  value=%.2f\n", k, t, v);
   }
+}
+
+static void printSMCPowerKeyRow(const char *key) {
+  char type[5] = {0};
+  SMCGetKeyTypeString(g_smcConn, key, type, sizeof(type));
+  double value = SMCGetFloatValue(g_smcConn, key);
+  int scaled = SMCKeyTypeIsScaled(g_smcConn, key);
+  printf("  %-5s type=%-4s scaled=%-3s value=%10.2f  %s\n", key, type,
+         scaled ? "yes" : "no", value,
+         value > 0 && value <= 1000.0 ? "accepted" : "REJECTED");
+}
+
+void dumpSMCPowerKeys(void) {
+  if (!g_smcConn)
+    g_smcConn = SMCOpen();
+  if (!g_smcConn) {
+    printf("SMC connection not available\n");
+    return;
+  }
+  printf("\n=== System power keys (readSystemPower order) ===\n");
+  printSMCPowerKeyRow("PSTR");
+  printSMCPowerKeyRow("PDTR");
+  printSMCPowerKeyRow("PD0R");
+  printf("chosen system power = %.2f W\n\n", readSystemPower(g_smcConn));
+
+  printf("=== DRAM power keys (PZD*) ===\n");
+  for (int i = 1; i <= 8; i++) {
+    char key[5];
+    snprintf(key, sizeof(key), "PZD%d", i);
+    SMCKeyData_keyInfo_t keyInfo;
+    if (SMCGetKeyInfo(g_smcConn, key, &keyInfo) != kIOReturnSuccess)
+      continue;
+    printSMCPowerKeyRow(key);
+  }
+
+  printf("\n=== Every SMC key decoding above 1000 (the kW-artifact range) ===\n");
+  printf("(Any hit here is a candidate source for a bogus Total Consumption.\n");
+  printf(" Bare-integer types here are raw counts, not watts.)\n");
+  int hits = 0;
+  int total = SMCGetKeyCount(g_smcConn);
+  for (int i = 0; i < total; i++) {
+    char k[5];
+    if (SMCGetKeyFromIndex(g_smcConn, i, k) != kIOReturnSuccess)
+      continue;
+    double v = SMCGetFloatValue(g_smcConn, k);
+    if (v <= 1000.0 || v > 1000000.0)
+      continue;
+    char type[5] = {0};
+    SMCGetKeyTypeString(g_smcConn, k, type, sizeof(type));
+    printf("  %-4s type=%-4s scaled=%-3s value=%.2f\n", k, type,
+           SMCKeyTypeIsScaled(g_smcConn, k) ? "yes" : "no", v);
+    hits++;
+  }
+  if (hits == 0)
+    printf("  (none)\n");
 }
 
 void dumpAllSMCTemps(void) {

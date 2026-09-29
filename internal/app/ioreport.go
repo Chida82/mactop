@@ -103,6 +103,7 @@ extern void debugIOReport(void);
 extern void printAllChannels(void);
 extern void debugMonitorChannels(int durationMs);
 extern void dumpAllSMCTemps(void);
+extern void dumpSMCPowerKeys(void);
 extern void dumpIOReportDebug(void);
 extern void setExpectedCoreCounts(int eCores, int pCores, int sCores);
 int setFanForceTest(int enabled);
@@ -395,6 +396,12 @@ func DebugIOReport() {
 // DumpAllSMCTemps prints all SMC temperature keys with raw values for diagnostics
 func DumpAllSMCTemps() {
 	C.dumpAllSMCTemps()
+}
+
+// DumpSMCPowerKeys prints the SMC power keys with their declared types, plus
+// any key that decodes into the kW-artifact range.
+func DumpSMCPowerKeys() {
+	C.dumpSMCPowerKeys()
 }
 
 // WiFiLinkInfo represents Wi-Fi interface link information
