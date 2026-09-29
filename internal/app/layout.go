@@ -155,11 +155,6 @@ var namedLayoutSetters = map[string]func(){
 }
 
 func setMemoryLayoutGrid() {
-	// Each panel owns a distinct signal:
-	// memoryGauge / memoryHistoryChart = used+swap
-	// memoryPressurePanel / memoryPressureHistoryChart = kernel pressure
-	// memBWHistoryChart = DRAM bandwidth
-	// processList = process table
 	grid.Set(
 		ui.NewRow(1.0/5,
 			ui.NewCol(1.0/2, memoryGauge),

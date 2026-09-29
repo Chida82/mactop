@@ -147,8 +147,6 @@ func GetPaletteHex(theme, colorName string) string {
 
 // 1977 theme uses fixed per-component gauge colors regardless of cycle position
 
-// --- Style helpers: centralize the repeated 3-5 line styling patterns ---
-
 func styleGauge(g *w.Gauge, color, labelColor ui.Color) {
 	if g == nil {
 		return

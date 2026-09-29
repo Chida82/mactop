@@ -993,7 +993,6 @@ func GetNativeUptime() (uint64, error) {
 // GetNativePartitions returns a list of mounted partitions
 func GetNativePartitions(all bool) ([]NativePartitionInfo, error) {
 	var mntbuf *C.struct_statfs
-	// getmntinfo returns the number of mounted filesystems
 	// MNT_NOWAIT = 2
 	count := C.getmntinfo(&mntbuf, 2)
 	if count == 0 {
@@ -1182,7 +1181,6 @@ func GetNativeHostInfo() (NativeHostInfo, error) {
 
 	uptime, _ := GetNativeUptime()
 
-	// BootTime = Now - Uptime
 	bootTime := uint64(time.Now().Unix()) - uptime
 
 	return NativeHostInfo{
