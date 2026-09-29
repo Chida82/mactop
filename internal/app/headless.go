@@ -158,8 +158,11 @@ func runHeadless(count int) {
 	// when the grant is missing and, when already granted (e.g. from prior
 	// overlay use), lights up the "<app> is recording your screen" indicator.
 	// Neither is acceptable for a cron/SSH/script tool, so the FPS counter is
-	// started only by the overlay. display_fps/frame_interval_ms are omitted
-	// from headless output (omitempty).
+	// started only by the overlay and stays 0 here.
+	// display_fps/frame_interval_ms carry `omitempty` for json/yaml/xml, so
+	// those formats drop the fields entirely. toon has no omitempty and the
+	// csv formatter writes a fixed column list, so both still emit the keys
+	// with a 0 value. Treat 0 as "not collected", not "0 FPS measured".
 
 	startHeadlessPrometheus()
 

@@ -348,6 +348,25 @@ func parseSocketParsed(parsed C.ports_sock_parsed) (proto string, port int, bind
 	return proto, port, bind, isListen, isEstab
 }
 
+// Mirror of the INI_* vflag bits from <netinet/in.h>, so tests can name them
+// without importing cgo (unsupported in _test.go files).
+const (
+	iniIPv4      = C.INI_IPV4
+	iniIPv6      = C.INI_IPV6
+	iniDualStack = C.INI_IPV4 | C.INI_IPV6
+)
+
+// formatParsedBindBytes is the testable entry point for formatParsedBind. A
+// short or oversized slice is zero-extended/truncated to 16 bytes, matching the
+// fixed-size laddr the C parser fills.
+func formatParsedBindBytes(vflag int, laddr []byte) string {
+	var arr [16]C.uchar
+	for i := 0; i < len(arr) && i < len(laddr); i++ {
+		arr[i] = C.uchar(laddr[i])
+	}
+	return formatParsedBind(vflag, arr)
+}
+
 func formatParsedBind(vflag int, laddr [16]C.uchar) string {
 	if vflag&C.INI_IPV4 != 0 || (vflag&C.INI_IPV6 == 0) {
 		ip := net.IPv4(byte(laddr[0]), byte(laddr[1]), byte(laddr[2]), byte(laddr[3]))

@@ -4,6 +4,49 @@ import (
 	"testing"
 )
 
+// formatParsedBind renders a listener's bind address. ports_parse_socket
+// memsets the struct and, when INI_IPV4 is set, copies only the 4 IPv4 bytes —
+// so laddr[4:16] stay zero. These cases pin that contract, especially the
+// dual-stack wildcard, which must read "[::]" and not a half-zeroed address.
+func TestFormatParsedBind(t *testing.T) {
+	t.Parallel()
+	allZero := func() []byte { return make([]byte, 16) }
+	withAddr := func(addrs ...byte) []byte {
+		b := allZero()
+		copy(b, addrs)
+		return b
+	}
+	tests := []struct {
+		name  string
+		vflag int
+		laddr []byte
+		want  string
+	}{
+		{"ipv4 wildcard", iniIPv4, allZero(), "*"},
+		{"ipv4 loopback", iniIPv4, withAddr(127, 0, 0, 1), "127.0.0.1"},
+		{"ipv4 explicit", iniIPv4, withAddr(192, 168, 1, 10), "192.168.1.10"},
+		{"ipv6 loopback", iniIPv6, withAddr(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1), "[::1]"},
+		{"ipv6 wildcard", iniIPv6, allZero(), "[::]"},
+		{"ipv6 explicit", iniIPv6, withAddr(0x20, 0x01, 0x0d, 0xb8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01), "[2001:db8::1]"},
+		// Dual-stack wildcard: the 4 IPv4 bytes are zero and the rest are never
+		// copied, so the IPv6 view is a clean all-zero address, not garbage.
+		{"dual wildcard", iniDualStack, allZero(), "[::]"},
+		{"dual ipv4 loopback", iniDualStack, withAddr(127, 0, 0, 1), "127.0.0.1"},
+		// No flags at all still means IPv4 on Darwin.
+		{"no flags wildcard", 0, allZero(), "*"},
+		{"no flags loopback", 0, withAddr(127, 0, 0, 1), "127.0.0.1"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := formatParsedBindBytes(tt.vflag, tt.laddr); got != tt.want {
+				t.Fatalf("formatParsedBindBytes(%#x, %v) = %q, want %q",
+					tt.vflag, tt.laddr, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestIsExternalBind(t *testing.T) {
 	t.Parallel()
 	tests := []struct {

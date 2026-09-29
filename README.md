@@ -1,7 +1,8 @@
 # mactop
 
-[![Go Report Card](https://goreportcard.com/badge/github.com/metaspartan/mactop/v2)](https://goreportcard.com/report/github.com/metaspartan/mactop/v2)
-[![GoDoc](https://godoc.org/github.com/metaspartan/mactop?status.svg)](https://godoc.org/github.com/metaspartan/mactop/v2)
+[![Go](https://img.shields.io/github/go-mod/go-version/metaspartan/mactop)](https://pkg.go.dev/github.com/metaspartan/mactop/v2)
+[![GoDoc](https://pkg.go.dev/badge/github.com/metaspartan/mactop/v2)](https://pkg.go.dev/github.com/metaspartan/mactop/v2)
+[![License](https://img.shields.io/github/license/metaspartan/mactop)](https://github.com/metaspartan/mactop/blob/main/LICENSE)
 ![GitHub Downloads (all assets, all releases)](https://img.shields.io/github/downloads/metaspartan/mactop/total) ![GitHub Release](https://img.shields.io/github/v/release/metaspartan/mactop)
 
 [![Homebrew Badge](https://img.shields.io/badge/homebrew-%23FBB040.svg?style=for-the-badge&logo=homebrew&logoColor=black)](https://formulae.brew.sh/formula/mactop)
