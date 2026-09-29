@@ -415,6 +415,7 @@ Info_BatteryValue = "%d%% (%s)"
 Info_BatteryCharging = "şarj oluyor"
 Info_BatteryDischarging = "pilde"
 Info_BatteryAC = "şebeke"
+Info_PowerSupply = "Güç kaynağı"
 
 TUI_MemoryBandwidthHistory = "Bellek Bant Genişliği Geçmişi"
 Metrics_MemBWHistoryDetail = "DRAM Bant Genişliği: %.1f GB/s"

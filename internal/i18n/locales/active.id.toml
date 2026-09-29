@@ -415,6 +415,7 @@ Info_BatteryValue = "%d%% (%s)"
 Info_BatteryCharging = "mengisi daya"
 Info_BatteryDischarging = "pakai baterai"
 Info_BatteryAC = "AC"
+Info_PowerSupply = "Sumber Daya"
 
 TUI_MemoryBandwidthHistory = "Riwayat Bandwidth Memori"
 Metrics_MemBWHistoryDetail = "Bandwidth DRAM: %.1f GB/s"

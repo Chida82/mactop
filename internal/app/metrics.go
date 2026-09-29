@@ -35,6 +35,8 @@ func startPrometheusServer(port string) {
 	registry.MustRegister(dramBandwidth)
 	registry.MustRegister(batteryPercent)
 	registry.MustRegister(batteryCharging)
+	registry.MustRegister(powerSupplyOnAC)
+	registry.MustRegister(powerSupplyAdapterWatts)
 	registry.MustRegister(cpuCoreUsage)
 	registry.MustRegister(systemInfoGauge)
 	registry.MustRegister(fanRPM)
@@ -87,6 +89,8 @@ func initializePrometheusSeries(sysInfo SystemInfo) {
 	for _, direction := range []string{"read", "write", "combined"} {
 		dramBandwidth.With(prometheus.Labels{"direction": direction}).Set(0)
 	}
+	powerSupplyOnAC.Set(0)
+	powerSupplyAdapterWatts.Set(-1)
 	for _, direction := range []string{"upload", "download"} {
 		tbNetworkSpeed.With(prometheus.Labels{"direction": direction}).Set(0)
 	}
@@ -431,6 +435,21 @@ func publishPrometheusMetrics(snapshot prometheusMetricsSnapshot) {
 	} else {
 		batteryPercent.Set(-1)
 		batteryCharging.Set(0)
+	}
+
+	// -1 means the hardware publishes no adapter rating, matching the
+	// "unavailable" convention already used for batteryPercent. That is the
+	// normal state on a desktop with an internal supply.
+	supply := GetPowerSupply()
+	if supply.OnACPower {
+		powerSupplyOnAC.Set(1)
+	} else {
+		powerSupplyOnAC.Set(0)
+	}
+	if supply.Rated() {
+		powerSupplyAdapterWatts.Set(float64(supply.AdapterWatts))
+	} else {
+		powerSupplyAdapterWatts.Set(-1)
 	}
 }
 

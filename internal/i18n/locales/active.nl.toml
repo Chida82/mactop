@@ -415,6 +415,7 @@ Info_BatteryValue = "%d%% (%s)"
 Info_BatteryCharging = "opladen"
 Info_BatteryDischarging = "op accu"
 Info_BatteryAC = "netstroom"
+Info_PowerSupply = "Voedingsbron"
 
 TUI_MemoryBandwidthHistory = "Geheugenbandbreedte-geschiedenis"
 Metrics_MemBWHistoryDetail = "DRAM-bandbreedte: %.1f GB/s"

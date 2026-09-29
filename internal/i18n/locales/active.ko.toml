@@ -415,6 +415,7 @@ Info_BatteryValue = "%d%% (%s)"
 Info_BatteryCharging = "충전 중"
 Info_BatteryDischarging = "배터리 사용"
 Info_BatteryAC = "AC 전원"
+Info_PowerSupply = "전원 공급 장치"
 
 TUI_MemoryBandwidthHistory = "메모리 대역폭 기록"
 Metrics_MemBWHistoryDetail = "DRAM 대역폭: %.1f GB/s"

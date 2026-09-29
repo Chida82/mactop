@@ -144,6 +144,7 @@ type HeadlessOutput struct {
 	Fans                  []HeadlessFan         `json:"fans,omitempty" yaml:"fans,omitempty" xml:"Fans" toon:"fans"`
 	Temperatures          []HeadlessTempGroup   `json:"temperatures,omitempty" yaml:"temperatures,omitempty" xml:"Temperatures" toon:"temperatures"`
 	Battery               *BatteryInfo          `json:"battery,omitempty" yaml:"battery,omitempty" xml:"Battery,omitempty" toon:"battery"`
+	PowerSupply           *PowerSupply          `json:"power_supply,omitempty" yaml:"power_supply,omitempty" xml:"PowerSupply,omitempty" toon:"power_supply"`
 }
 
 func runHeadless(count int) {
@@ -271,6 +272,7 @@ func printCSVHeader() {
 
 	// Add JSON blob headers for complex nested data
 	headers = append(headers, "Battery_Present", "Battery_Percent", "Battery_Charging", "Battery_State")
+	headers = append(headers, "PowerSupply_OnACPower", "PowerSupply_AdapterConnected", "PowerSupply_AdapterWatts", "PowerSupply_AdapterDescription", "PowerSupply_Source")
 	headers = append(headers, "Thunderbolt_Info_JSON", "Processes_JSON", "Ports_JSON", "Ports_Total", "Ports_External", "Ports_TCP", "Ports_UDP", "Network_Links_JSON", "Volumes_JSON")
 
 	// Print CSV header line
@@ -420,6 +422,21 @@ func processHeadlessSample(format string, tbInfo *ThunderboltOutput, sysInfo Sys
 			batCharging = "false"
 		}
 		record = append(record, batPresent, batPercent, batCharging, batState)
+
+		// Power supply columns are always populated: a battery-less Mac still
+		// reports its source, and an unrated adapter yields an empty wattage
+		// rather than a misleading 0.
+		var acPower, adapterConnected, adapterWatts, adapterDesc, supplySource string
+		if output.PowerSupply != nil {
+			acPower = fmt.Sprintf("%t", output.PowerSupply.OnACPower)
+			adapterConnected = fmt.Sprintf("%t", output.PowerSupply.AdapterConnected)
+			if output.PowerSupply.AdapterWatts > 0 {
+				adapterWatts = fmt.Sprintf("%d", output.PowerSupply.AdapterWatts)
+			}
+			adapterDesc = output.PowerSupply.AdapterDescription
+			supplySource = output.PowerSupply.Source
+		}
+		record = append(record, acPower, adapterConnected, adapterWatts, adapterDesc, supplySource)
 
 		tbJSON, _ := json.Marshal(output.ThunderboltInfo)
 		procsJSON, _ := json.Marshal(output.Processes)
@@ -648,6 +665,11 @@ func collectHeadlessData(tbInfo *ThunderboltOutput, sysInfo SystemInfo) Headless
 	if bat := GetBatteryInfo(); bat.Present {
 		output.Battery = &bat
 	}
+	// Emitted unconditionally: on a battery-less Mac the source is still
+	// meaningful (a Studio reports AC with no adapter rating), and consumers
+	// need to tell "no external supply" apart from "supply, rating unknown".
+	supply := GetPowerSupply()
+	output.PowerSupply = &supply
 	if sysInfo.ECoreCount > 0 {
 		output.ECPUUsage = []float64{float64(m.EClusterFreqMHz), m.EClusterActive}
 	}

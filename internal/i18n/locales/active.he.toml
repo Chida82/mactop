@@ -415,6 +415,7 @@ Info_BatteryValue = "%d%% (%s)"
 Info_BatteryCharging = "בטעינה"
 Info_BatteryDischarging = "על סוללה"
 Info_BatteryAC = "חשמל"
+Info_PowerSupply = "ספק חשמל"
 
 TUI_MemoryBandwidthHistory = "היסטוריית רוחב פס זיכרון"
 Metrics_MemBWHistoryDetail = "רוחב פס DRAM: %.1f GB/s"

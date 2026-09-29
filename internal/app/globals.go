@@ -337,6 +337,20 @@ var (
 		},
 	)
 
+	powerSupplyOnAC = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "mactop_power_supply_on_ac",
+			Help: "1 if drawing from an external power supply, 0 if on battery",
+		},
+	)
+
+	powerSupplyAdapterWatts = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "mactop_power_supply_adapter_watts",
+			Help: "Rated wattage of the attached power supply, -1 if the hardware does not report one",
+		},
+	)
+
 	dramBandwidth = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "mactop_dram_bandwidth_gbs",

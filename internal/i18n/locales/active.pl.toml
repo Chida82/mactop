@@ -415,6 +415,7 @@ Info_BatteryValue = "%d%% (%s)"
 Info_BatteryCharging = "ładowanie"
 Info_BatteryDischarging = "na baterii"
 Info_BatteryAC = "zasilanie sieciowe"
+Info_PowerSupply = "Zasilacz"
 
 TUI_MemoryBandwidthHistory = "Historia przepustowości pamięci"
 Metrics_MemBWHistoryDetail = "Przepustowość DRAM: %.1f GB/s"

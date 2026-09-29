@@ -415,6 +415,7 @@ Info_BatteryValue = "%d%% (%s)"
 Info_BatteryCharging = "зарядка"
 Info_BatteryDischarging = "от батареи"
 Info_BatteryAC = "от сети"
+Info_PowerSupply = "Блок питания"
 
 TUI_MemoryBandwidthHistory = "История пропускной способности памяти"
 Metrics_MemBWHistoryDetail = "Пропускная способность DRAM: %.1f ГБ/с"

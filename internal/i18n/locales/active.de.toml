@@ -415,6 +415,7 @@ Info_BatteryValue = "%d%% (%s)"
 Info_BatteryCharging = "lädt"
 Info_BatteryDischarging = "im Akkubetrieb"
 Info_BatteryAC = "Netzbetrieb"
+Info_PowerSupply = "Netzteil"
 
 TUI_MemoryBandwidthHistory = "Verlauf der Speicherbandbreite"
 Metrics_MemBWHistoryDetail = "DRAM-Bandbreite: %.1f GB/s"

@@ -415,6 +415,7 @@ Info_BatteryValue = "%d%% (%s)"
 Info_BatteryCharging = "充電中"
 Info_BatteryDischarging = "バッテリー駆動"
 Info_BatteryAC = "AC電源"
+Info_PowerSupply = "電源"
 
 TUI_MemoryBandwidthHistory = "メモリ帯域幅の履歴"
 Metrics_MemBWHistoryDetail = "DRAM帯域幅: %.1f GB/s"

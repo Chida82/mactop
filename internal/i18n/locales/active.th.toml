@@ -415,6 +415,7 @@ Info_BatteryValue = "%d%% (%s)"
 Info_BatteryCharging = "กำลังชาร์จ"
 Info_BatteryDischarging = "ใช้แบตเตอรี่"
 Info_BatteryAC = "ไฟ AC"
+Info_PowerSupply = "แหล่งจ่ายไฟ"
 
 TUI_MemoryBandwidthHistory = "ประวัติแบนด์วิดท์หน่วยความจำ"
 Metrics_MemBWHistoryDetail = "แบนด์วิดท์ DRAM: %.1f GB/s"

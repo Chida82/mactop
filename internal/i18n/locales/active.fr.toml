@@ -415,6 +415,7 @@ Info_BatteryValue = "%d%% (%s)"
 Info_BatteryCharging = "en charge"
 Info_BatteryDischarging = "sur batterie"
 Info_BatteryAC = "secteur"
+Info_PowerSupply = "Alimentation"
 
 TUI_MemoryBandwidthHistory = "Historique de la bande passante mémoire"
 Metrics_MemBWHistoryDetail = "Bande passante DRAM : %.1f Go/s"

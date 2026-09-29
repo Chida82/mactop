@@ -1941,6 +1941,10 @@ func updatePowerChartText(cpuMetrics CPUMetrics, thermalStr string) {
 	if line := formatBatteryLine(); line != "" {
 		PowerChart.Text += "\n" + line
 	}
+
+	if line := powerSupplyLine(); line != "" {
+		PowerChart.Text += "\n" + line
+	}
 }
 
 func updateMemoryGaugeTitle(memoryMetrics MemoryMetrics) {

@@ -415,6 +415,7 @@ Info_BatteryValue = "%d%% (%s)"
 Info_BatteryCharging = "قيد الشحن"
 Info_BatteryDischarging = "على البطارية"
 Info_BatteryAC = "التيار المتردد"
+Info_PowerSupply = "مزوّد الطاقة"
 
 TUI_MemoryBandwidthHistory = "سجل عرض نطاق الذاكرة"
 Metrics_MemBWHistoryDetail = "عرض نطاق DRAM: %.1f GB/s"
