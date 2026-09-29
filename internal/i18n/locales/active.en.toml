@@ -291,6 +291,7 @@ Options:
       --fan-auto          Restore automatic fan control and exit (requires sudo)
       --fan-status        Print fan status as JSON and exit
       --dump-temps        Diagnostic: dump all raw SMC temperature keys and exit
+      --dump-smc-power    Diagnostic: dump SMC power keys and types, and any key decoding above 1000
       --dump-debug        Diagnostic: dump IOReport/HID/SMC/NVMe debug info and exit
 
 Theme File:
