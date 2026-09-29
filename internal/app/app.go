@@ -923,10 +923,21 @@ func setupLogfile() (*os.File, error) {
 	return logfile, nil
 }
 
-func updateTotalPowerChart(watts float64) {
-	if watts > maxPowerSeen {
-		maxPowerSeen = watts * 1.1
+const powerScaleHeadroom = 1.1
+const powerScaleDecayRate = 0.03
+const minPowerScale = 0.1
+
+func nextPowerScale(prev, watts float64) float64 {
+	floor := max(watts*powerScaleHeadroom, minPowerScale)
+	if floor > prev {
+		return floor
 	}
+	return max(prev*(1-powerScaleDecayRate), floor)
+}
+
+func updateTotalPowerChart(watts float64) {
+	watts = plausiblePowerW(watts)
+	maxPowerSeen = nextPowerScale(maxPowerSeen, watts)
 	scaledValue := int((watts / maxPowerSeen) * 8)
 	if watts > 0 && scaledValue == 0 {
 		scaledValue = 1
@@ -965,7 +976,7 @@ func updateTotalPowerChart(watts float64) {
 		}
 		visibleData := powerUsageHistory[len(powerUsageHistory)-visibleWidth:]
 		powerHistoryChart.Data = [][]float64{visibleData}
-		powerHistoryChart.MaxVal = maxPowerSeen * 1.1
+		powerHistoryChart.MaxVal = maxPowerSeen * powerScaleHeadroom
 		powerHistoryChart.DataLabels = []string{fmt.Sprintf("%.1fW", watts)}
 		powerHistoryChart.Title = fmt.Sprintf(i18n.T("Metrics_PowerHistoryDetail"), avgWatts, maxPowerSeen)
 	}

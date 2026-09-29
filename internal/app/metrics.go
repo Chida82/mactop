@@ -95,7 +95,24 @@ func initializePrometheusSeries(sysInfo SystemInfo) {
 	}
 }
 
+const maxPlausiblePowerWatts = 1000.0
+
+func plausiblePowerW(w float64) float64 {
+	if math.IsNaN(w) || math.IsInf(w, 0) || w < 0 || w > maxPlausiblePowerWatts {
+		return 0
+	}
+	return w
+}
+
 func normalizeSocMetricsPower(m SocMetrics) SocMetrics {
+	m.CPUPower = plausiblePowerW(m.CPUPower)
+	m.GPUPower = plausiblePowerW(m.GPUPower)
+	m.ANEPower = plausiblePowerW(m.ANEPower)
+	m.DRAMPower = plausiblePowerW(m.DRAMPower)
+	m.GPUSRAMPower = plausiblePowerW(m.GPUSRAMPower)
+	m.SystemPower = plausiblePowerW(m.SystemPower)
+	m.TotalPower = plausiblePowerW(m.TotalPower)
+
 	componentSum := m.TotalPower
 	totalPower := m.SystemPower
 	if totalPower < componentSum {

@@ -820,9 +820,10 @@ static double stateBinAverage(CFDictionaryRef item, bool skipLowest) {
 //         would include battery charging) keep PSTR.
 static double readSystemPower(io_connect_t conn) {
   static const char *keys[] = {"PSTR", "PDTR", "PD0R"};
+  const double maxPlausibleWatts = 1000.0;
   for (size_t i = 0; i < sizeof(keys) / sizeof(keys[0]); i++) {
     double w = SMCGetFloatValue(conn, keys[i]);
-    if (w > 0)
+    if (w > 0 && w <= maxPlausibleWatts)
       return w;
   }
   return 0;

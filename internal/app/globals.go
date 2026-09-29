@@ -113,7 +113,7 @@ var (
 	sortReverse                   = false
 	columns                       = []string{"PID", "USER", "VIRT", "RES", "CPU", "GPU", "MEM", "TIME", "CMD"}
 	selectedColumn                = 4
-	maxPowerSeen                  = 0.1
+	maxPowerSeen                  = minPowerScale
 	gpuValues                     = make([]float64, 100)
 
 	prometheusPort   string
