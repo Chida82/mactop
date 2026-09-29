@@ -329,7 +329,7 @@ Info_PowerValue = "%.2f W (Avg %.0f W)"
 Info_NetworkValue = "↑ %s/s ↓ %s/s"
 Info_DiskValue = "R %s/s W %s/s"
 Info_DRAMBWValue = "R %.1f / W %.1f / %.1f GB/s"
-Info_FanValue = "%d RPM (%s, %d-%d)"
+Info_FanValue = "%s (%s, %d-%d)"
 Info_WiFiValue = "%s @ %dMbps (%s)"
 Info_VolumeValue = "%s / %s (%s free)"
 

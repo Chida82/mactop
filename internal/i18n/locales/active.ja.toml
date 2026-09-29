@@ -322,7 +322,7 @@ Info_PowerValue = "%.2f W (平均 %.0f W)"
 Info_NetworkValue = "↑ %s/s ↓ %s/s"
 Info_DiskValue = "読 %s/s 書 %s/s"
 Info_DRAMBWValue = "読 %.1f / 書 %.1f / %.1f GB/s"
-Info_FanValue = "%d RPM (%s, %d-%d)"
+Info_FanValue = "%s (%s, %d-%d)"
 Info_WiFiValue = "%s @ %dMbps (%s)"
 Info_VolumeValue = "%s / %s (%s 空き)"
 

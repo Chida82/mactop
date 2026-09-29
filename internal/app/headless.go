@@ -112,6 +112,10 @@ type HeadlessFan struct {
 	MinRPM    int    `json:"min_rpm" yaml:"min_rpm" xml:"MinRPM" toon:"min_rpm"`
 	MaxRPM    int    `json:"max_rpm" yaml:"max_rpm" xml:"MaxRPM" toon:"max_rpm"`
 	Mode      string `json:"mode" yaml:"mode" xml:"Mode" toon:"mode"`
+	// TachReadable is false when the SMC reports a non-zero minimum for the fan
+	// but the actual-RPM key returned 0, so the 0 in RPM is an absent tach value
+	// rather than a stopped fan. Issue #78.
+	TachReadable bool `json:"tach_readable" yaml:"tach_readable" xml:"TachReadable" toon:"tach_readable"`
 }
 
 type HeadlessOutput struct {
@@ -829,13 +833,14 @@ func buildHeadlessFans(fans []FanInfo) []HeadlessFan {
 			mode = "manual"
 		}
 		result = append(result, HeadlessFan{
-			ID:        f.ID,
-			Name:      f.Name,
-			RPM:       f.ActualRPM,
-			TargetRPM: f.TargetRPM,
-			MinRPM:    f.MinRPM,
-			MaxRPM:    f.MaxRPM,
-			Mode:      mode,
+			ID:           f.ID,
+			Name:         f.Name,
+			RPM:          f.ActualRPM,
+			TargetRPM:    f.TargetRPM,
+			MinRPM:       f.MinRPM,
+			MaxRPM:       f.MaxRPM,
+			Mode:         mode,
+			TachReadable: f.TachReadable,
 		})
 	}
 	return result

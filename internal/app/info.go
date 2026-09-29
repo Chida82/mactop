@@ -186,7 +186,11 @@ func buildFanLines(formatLine func(string, string) string) []string {
 		if fan.Mode == 1 {
 			modeStr = i18n.T("Info_Manual")
 		}
-		lines = append(lines, formatLine(fan.Name, fmt.Sprintf(i18n.T("Info_FanValue"), fan.ActualRPM, modeStr, fan.MinRPM, fan.MaxRPM)))
+		rpmText := fmt.Sprintf("%d RPM", fan.ActualRPM)
+		if !fan.TachReadable {
+			rpmText = i18n.T("Info_NotAvailable")
+		}
+		lines = append(lines, formatLine(fan.Name, fmt.Sprintf(i18n.T("Info_FanValue"), rpmText, modeStr, fan.MinRPM, fan.MaxRPM)))
 	}
 	return lines
 }
@@ -439,6 +443,19 @@ func fanRPMBar(fan FanInfo, themeColor string) []string {
 	if fan.Mode == 1 {
 		modeStr = i18n.T("Fan_Mode_Manual")
 		modeColor = "yellow"
+	}
+
+	// An unreadable tach is drawn as an empty bar with "N/A", never as a 0 RPM
+	// reading — a false 0 implies stopped fans, which is the #78 complaint.
+	if !fan.TachReadable {
+		return []string{
+			fmt.Sprintf("[%s](fg:%s,mod:bold)  [%s](fg:%s) [%s](fg:%s,mod:bold) / %d RPM  [%s](fg:%s)",
+				fan.Name, themeColor,
+				strings.Repeat("░", 20), themeColor,
+				i18n.T("Info_NotAvailable"), themeColor, fan.MaxRPM, modeStr, modeColor),
+			fmt.Sprintf("    "+i18n.T("Fan_TargetRange"),
+				fan.TargetRPM, fan.MinRPM, fan.MaxRPM),
+		}
 	}
 
 	pct := 0.0

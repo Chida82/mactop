@@ -177,6 +177,7 @@ typedef struct {
   int targetRPM;
   int mode; // 0=auto, 1=forced
   int id;
+  int tachReadable; // 0 = the tach key reported nothing credible
 } fan_info_t;
 
 // Temperature sensor structure
@@ -2313,19 +2314,36 @@ static void dumpSMCFanKeys(void) {
   }
 }
 
-// dumpSMCFanCandidates scans every SMC key and prints those whose decoded value
-// lands in a plausible fan-RPM range. Apple Silicon fan keys are near-arbitrary
-// per-generation FourCCs (iStat/TG Pro keep a hand-curated per-model map; the
-// Asahi macsmc driver reads the key from the device tree) — the actual-RPM key
-// is NOT universally "F0Ac". On models where F0Ac reads 0, this surfaces the key
-// whose value matches the RPM shown by another tool, so it can be mapped in.
+// dumpSMCFanCandidates scans every SMC key in the plausible fan-RPM band and
+// reports only the ones whose value MOVES between two samples. Apple Silicon fan
+// keys are near-arbitrary per-generation FourCCs (iStat/TG Pro keep a
+// hand-curated per-model map; the Asahi macsmc driver reads the key from the
+// device tree) — the actual-RPM key is NOT universally "F0Ac". A tachometer
+// tracks the fan, so it moves; a min/max limit, fixed floor or clock rate in the
+// same numeric band does not. Filtering on movement is what turns the list into
+// a single usable answer, which a value-only dump cannot do. Run while the fans
+// are ramping. See issue #78.
 static void dumpSMCFanCandidates(void) {
   if (!g_smcConn)
     return;
-  printf("\n=== SMC keys with fan-RPM-plausible values (200-6000) ===\n");
-  printf("(Match against the RPM another tool shows to find the tach key.\n");
-  printf(" CPU/GPU frequency keys in MHz may also appear here — ignore those.)\n");
+  printf("\n=== Fan-tach candidates: keys in the RPM band that MOVE ===\n");
+  printf("(A real tachometer tracks the fan. A min/max limit, a fixed floor or a\n");
+  printf(" clock rate is a constant, so it is filtered out. Run this while the\n");
+  printf(" fans are ramping and the key that moves is the one to map.)\n");
+
   int total = SMCGetKeyCount(g_smcConn);
+  if (total <= 0)
+    return;
+
+  char (*keys)[5] = calloc((size_t)total, 5);
+  double *first = calloc((size_t)total, sizeof(double));
+  if (!keys || !first) {
+    free(keys);
+    free(first);
+    return;
+  }
+
+  int n = 0;
   for (int i = 0; i < total; i++) {
     char k[5];
     if (SMCGetKeyFromIndex(g_smcConn, i, k) != kIOReturnSuccess)
@@ -2333,16 +2351,43 @@ static void dumpSMCFanCandidates(void) {
     double v = SMCGetFloatValue(g_smcConn, k);
     if (v < 200.0 || v > 6000.0)
       continue;
+    memcpy(keys[n], k, 5);
+    first[n] = v;
+    n++;
+  }
+  if (n == 0) {
+    printf("  (no keys in the 200-6000 band)\n");
+    free(keys);
+    free(first);
+    return;
+  }
+
+  usleep(1500000);
+
+  int moved = 0;
+  for (int i = 0; i < n; i++) {
+    double second = SMCGetFloatValue(g_smcConn, keys[i]);
+    if (second == first[i])
+      continue;
     SMCKeyData_keyInfo_t ki;
     char t[5] = {0};
-    if (SMCGetKeyInfo(g_smcConn, k, &ki) == kIOReturnSuccess) {
+    if (SMCGetKeyInfo(g_smcConn, keys[i], &ki) == kIOReturnSuccess) {
       t[0] = (ki.dataType >> 24) & 0xff;
       t[1] = (ki.dataType >> 16) & 0xff;
       t[2] = (ki.dataType >> 8) & 0xff;
       t[3] = ki.dataType & 0xff;
     }
-    printf("  %-4s  type=%-4s  value=%.2f\n", k, t, v);
+    printf("  MOVING %-4s  type=%-4s  %.2f -> %.2f\n", keys[i], t, first[i],
+           second);
+    moved++;
   }
+  if (moved == 0)
+    printf("  (no key in the band changed over 1.5 s — no live tach in it)\n");
+  printf("  (%d of %d keys in the band were constant and filtered out)\n",
+         n - moved, n);
+
+  free(keys);
+  free(first);
 }
 
 static void printSMCPowerKeyRow(const char *key) {
@@ -2496,6 +2541,7 @@ static int readFanInfo(fan_info_t *fans, int maxFans) {
   for (int i = 0; i < fanCount; i++) {
     char key[5];
     fans[i].id = i;
+    fans[i].tachReadable = 1;
 
     // Read actual RPM: F%dAc
     snprintf(key, sizeof(key), "F%dAc", i);
@@ -2512,6 +2558,15 @@ static int readFanInfo(fan_info_t *fans, int maxFans) {
     // Read target RPM: F%dTg
     snprintf(key, sizeof(key), "F%dTg", i);
     fans[i].targetRPM = (int)SMCGetFloatValue(g_smcConn, key);
+
+    // A fan whose SMC floor is above zero cannot physically be stopped, so a
+    // 0 here means the tach value is not being exposed to an unprivileged
+    // reader rather than that the fan is idle. Report it as unreadable instead
+    // of a measurement: on the M2 Ultra the tach key decodes cleanly and still
+    // returns 0.00 even under sustained full-core load, while F%dMn / F%dMx
+    // read correctly. See issue #78.
+    if (fans[i].actualRPM <= 0 && fans[i].minRPM > 0)
+      fans[i].tachReadable = 0;
 
     // Read mode: F%dMd (0=auto, 1=forced; data type varies by Mac model)
     snprintf(key, sizeof(key), "F%dMd", i);

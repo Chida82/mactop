@@ -53,6 +53,7 @@ typedef struct {
     int targetRPM;
     int mode;
     int id;
+    int tachReadable;
 } fan_info_t;
 
 typedef struct {
@@ -134,6 +135,12 @@ type FanInfo struct {
 	MaxRPM    int    `json:"max_rpm"`
 	TargetRPM int    `json:"target_rpm"`
 	Mode      int    `json:"mode"` // 0=auto, 1=forced
+
+	// TachReadable is false when the SMC floor for this fan is above zero, so
+	// the fan cannot be stopped, yet the actual-RPM key reported 0. The 0 is
+	// then an absent tach value rather than a measurement, and consumers should
+	// show the reading as unavailable instead of "0 RPM". See issue #78.
+	TachReadable bool `json:"tach_readable"`
 }
 
 // TempSensor represents a single temperature sensor reading
@@ -265,13 +272,14 @@ func sampleSocMetrics(durationMs int) SocMetrics {
 	for i := 0; i < int(pm.fanCount) && i < 8; i++ {
 		cf := pm.fans[i]
 		fans[i] = FanInfo{
-			ID:        int(cf.id),
-			Name:      C.GoString(&cf.name[0]),
-			ActualRPM: int(cf.actualRPM),
-			MinRPM:    int(cf.minRPM),
-			MaxRPM:    int(cf.maxRPM),
-			TargetRPM: int(cf.targetRPM),
-			Mode:      int(cf.mode),
+			ID:           int(cf.id),
+			Name:         C.GoString(&cf.name[0]),
+			ActualRPM:    int(cf.actualRPM),
+			MinRPM:       int(cf.minRPM),
+			MaxRPM:       int(cf.maxRPM),
+			TargetRPM:    int(cf.targetRPM),
+			Mode:         int(cf.mode),
+			TachReadable: cf.tachReadable != 0,
 		}
 	}
 
@@ -376,13 +384,14 @@ func GetFanList() []FanInfo {
 	fans := make([]FanInfo, 0, n)
 	for i := 0; i < n && i < len(cf); i++ {
 		fans = append(fans, FanInfo{
-			ID:        int(cf[i].id),
-			Name:      C.GoString(&cf[i].name[0]),
-			ActualRPM: int(cf[i].actualRPM),
-			MinRPM:    int(cf[i].minRPM),
-			MaxRPM:    int(cf[i].maxRPM),
-			TargetRPM: int(cf[i].targetRPM),
-			Mode:      int(cf[i].mode),
+			ID:           int(cf[i].id),
+			Name:         C.GoString(&cf[i].name[0]),
+			ActualRPM:    int(cf[i].actualRPM),
+			MinRPM:       int(cf[i].minRPM),
+			MaxRPM:       int(cf[i].maxRPM),
+			TargetRPM:    int(cf[i].targetRPM),
+			Mode:         int(cf[i].mode),
+			TachReadable: cf[i].tachReadable != 0,
 		})
 	}
 	return fans
