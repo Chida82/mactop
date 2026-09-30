@@ -3763,7 +3763,7 @@ PowerMetrics samplePowerMetrics(int durationMs) {
         // skipped entirely, so those chips reported 0 GB/s (and 0% ANE) even
         // under full Foundation Models load — handle it as the combined total.
         if (stateCount > 1 && strcmp(sub, "AF BW") == 0 &&
-            (strstr(chn, "RD") != NULL || strstr(chn, "WR") != NULL)) {
+            isAneBwDirectionChannel(chn)) {
           double avgGBs = stateBinAverage(item, false);
           if (avgGBs > 0) {
             // Scale by the measured sample window (actualDurationNs), not the

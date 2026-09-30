@@ -74,6 +74,15 @@ static inline AneBwKind aneBwKind(const char *chn) {
   return ANE_BW_WRITE;
 }
 
+// isAneBwDirectionChannel accepts every channel naming aneBwKind() can
+// classify, including the "ANE0 RW" spelling. The gate must not test for
+// "RD" or "WR" alone: neither substring occurs in "RW", so such a channel
+// would be filtered out here and aneBwKind() would never classify it.
+static inline bool isAneBwDirectionChannel(const char *chn) {
+  return strstr(chn, "RD+WR") != NULL || strstr(chn, "RW") != NULL ||
+         strstr(chn, "RD") != NULL || strstr(chn, "WR") != NULL;
+}
+
 // CPU cluster power histograms in PMP<n> / "Energy": "PACC", "PACC0",
 // "MACC1", "PACC0 SRAM". Not "AGX" (GPU).
 static inline bool isPmpCpuPowerChannel(const char *sub, const char *chn) {

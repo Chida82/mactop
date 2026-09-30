@@ -43,6 +43,12 @@ func pmpAneBwKind(chn string) int {
 	return int(C.aneBwKind(c))
 }
 
+func pmpIsAneBwDirectionChannel(chn string) bool {
+	c := C.CString(chn)
+	defer C.free(unsafe.Pointer(c))
+	return bool(C.isAneBwDirectionChannel(c))
+}
+
 func pmpBinWeightedAverage(bins []float64, residency []int64, skipLowest bool) float64 {
 	if len(bins) == 0 {
 		return 0

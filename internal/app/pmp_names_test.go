@@ -92,6 +92,47 @@ func TestAneBwKind(t *testing.T) {
 	}
 }
 
+// The AF BW gate must admit every channel aneBwKind can classify, or a
+// combined-only chip ("ANE0 RW") is filtered out and reports 0 GB/s forever.
+// Neither "RD" nor "WR" occurs in "RW", so this is a real trap.
+func TestIsAneBwDirectionChannel(t *testing.T) {
+	cases := map[string]bool{
+		"ANE0 RD":    true,
+		"ANE0 WR":    true,
+		"ANE0 RD+WR": true,
+		"ANE0 RW":    true,
+		"ANE1 L0 RW": true,
+		"ANE L1 RD":  true,
+		"ANE0 CH":    false,
+		"AF BW":      false,
+		"":           false,
+	}
+	for chn, want := range cases {
+		if got := pmpIsAneBwDirectionChannel(chn); got != want {
+			t.Errorf("isAneBwDirectionChannel(%q) = %v, want %v", chn, got, want)
+		}
+	}
+}
+
+// The invariant that matters: a channel the gate rejects is never classified,
+// and the combined classification is reachable through the gate.
+func TestAneBwGateCoversEveryClassifiedChannel(t *testing.T) {
+	const combined = 2
+	names := []string{
+		"ANE0 RD", "ANE0 WR", "ANE0 RD+WR", "ANE0 RW",
+		"ANE L0 RD", "ANE L1 WR", "ANE1 L0 RD", "ANE1 L1 RD+WR",
+	}
+	for _, chn := range names {
+		if !pmpIsAneBwDirectionChannel(chn) {
+			t.Errorf("gate rejects %q, so its classification never runs", chn)
+		}
+	}
+	if !pmpIsAneBwDirectionChannel("ANE0 RW") ||
+		pmpAneBwKind("ANE0 RW") != combined {
+		t.Error("ANE0 RW must pass the gate and classify as combined")
+	}
+}
+
 func TestPmpCPUPowerChannel(t *testing.T) {
 	cases := []struct {
 		sub, chn string
