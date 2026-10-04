@@ -85,9 +85,9 @@ func (t *tailChart) Draw(buf *ui.Buffer) {
 	}
 	// I temi standard forzano un solo colore per tutte le linee: la seconda va distinta.
 	if len(t.series) > 1 {
-		second := ui.ColorMagenta
+		second := ui.ColorYellow // come temperature e ventole in salita
 		if t.BorderStyle.Fg == second {
-			second = ui.ColorYellow
+			second = ui.ColorMagenta
 		}
 		t.LineColors = []ui.Color{t.BorderStyle.Fg, second}
 	}
