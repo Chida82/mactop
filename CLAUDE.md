@@ -51,7 +51,9 @@ Power | sparkline watt  2.0/8                Ventole | Temperature        0.32
 
 - **CPU/GPU**: `cpuHistoryChart`/`gpuHistoryChart` con il titolo preso da `cpuGauge.Title`/`gpuGauge.Title`
   (uso, frequenza, temperatura), così bastano poche righe.
-- **DRAM**: `memBWHistoryChart` (al posto di ANE). **MEM**: `memoryHistoryChart` (due linee, usata e swap, come L10).
+- **DRAM**: `memBWHistoryChart` (al posto di ANE), titolo con R e W. **MEM**: `memoryHistoryChart` (due linee, usata e swap, come L10).
+- Grafici a due linee: i temi standard forzano un colore unico (`styleStepChart`), quindi `tailChart` colora la
+  seconda linea in magenta (giallo se il tema è magenta) e mette il nome della serie davanti all'etichetta (`R`/`W`, `Usata`/`Swap`).
 - **Consumi**: `PowerChart` + `sparklineGroup` spostati in basso a sinistra.
 - **Ventole**: contenuto di `buildFanStatusText` (come il layout fan); titolo con lo stato fanboost
   (`Mode == 1` → "BOOST (manuale)", altrimenti "AUTO (curva Apple)").
