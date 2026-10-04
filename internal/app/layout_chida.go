@@ -16,7 +16,7 @@ import (
 const LayoutChida = "chida"
 
 func init() {
-	layoutOrder = append(layoutOrder, LayoutChida)
+	layoutOrder = append([]string{LayoutChida}, layoutOrder...) // primo con "l"
 	namedLayoutSetters[LayoutChida] = setChidaLayoutGrid
 }
 
@@ -46,8 +46,8 @@ func setChidaLayoutGrid() {
 				),
 			),
 			ui.NewCol(0.6,
-				ui.NewRow(0.9, processList),
-				ui.NewRow(0.1,
+				ui.NewRow(0.68, processList),
+				ui.NewRow(0.32,
 					ui.NewCol(1.0/2, chidaFans),
 					ui.NewCol(1.0/2, chidaTemps),
 				),
@@ -94,36 +94,29 @@ func (p *textPanel) Draw(buf *ui.Buffer) {
 	p.Paragraph.Draw(buf)
 }
 
-func chidaFanText(width int) (string, string) {
-	fans := lastCPUMetrics.Fans
-	if len(fans) == 0 {
-		return "Ventole", "nessuna ventola"
+func chidaThemeColor() string {
+	c := currentConfig.Theme
+	if c == "" {
+		c = "green"
 	}
-	var b strings.Builder
-	manual := false
-	for i, f := range fans {
-		rpm := fmt.Sprintf(" %d/%d", f.ActualRPM, f.MaxRPM)
-		if !f.TachReadable {
-			rpm = " n/d"
-		}
-		barW := max(width-3-len(rpm), 0)
-		fill := 0
-		if f.TachReadable && f.MaxRPM > 0 {
-			fill = min(barW*f.ActualRPM/f.MaxRPM, barW)
-		}
-		if i > 0 {
-			b.WriteByte('\n')
-		}
-		fmt.Fprintf(&b, "F%d %s%s%s", i, strings.Repeat("█", fill), strings.Repeat("░", barW-fill), rpm)
-		manual = manual || f.Mode == 1
+	if IsLightMode && c == "white" {
+		c = "black"
 	}
-	if manual {
-		return "Ventole · BOOST (manuale)", b.String()
-	}
-	return "Ventole · AUTO (curva Apple)", b.String()
+	return c
 }
 
-// Massimi per gruppo con le stesse chiavi di fanboost; SSD dalla temperatura NVMe SMART.
+// Stesso contenuto del pannello ventole di L21, con lo stato di fanboost nel titolo.
+func chidaFanText(int) (string, string) {
+	title := "Ventole · AUTO (curva Apple)"
+	for _, f := range lastCPUMetrics.Fans {
+		if f.Mode == 1 {
+			title = "Ventole · BOOST (manuale)"
+		}
+	}
+	return title, buildFanStatusText(chidaThemeColor())
+}
+
+// Riga con i massimi che usa fanboost (SSD da NVMe SMART), poi i gruppi di L21.
 func chidaTempText(int) (string, string) {
 	var cpu, gpu, mem, ssd, bat float64
 	for _, s := range lastCPUMetrics.TempSensors {
@@ -150,5 +143,8 @@ func chidaTempText(int) (string, string) {
 		}
 		return formatTemp(v)
 	}
-	return "Temperature (max)", fmt.Sprintf("CPU %-6s GPU %-6s MEM %s\nSSD %-6s BAT %s", t(cpu), t(gpu), t(mem), t(ssd), t(bat))
+	tc := chidaThemeColor()
+	lines := []string{fmt.Sprintf("[fanboost max](fg:%s,mod:bold)  CPU %s  GPU %s  MEM %s  SSD %s  BAT %s", tc, t(cpu), t(gpu), t(mem), t(ssd), t(bat)), ""}
+	lines = append(lines, buildGroupedTempLines(lastCPUMetrics.TempSensors, tc)...)
+	return "Temperature", strings.Join(lines, "\n")
 }
