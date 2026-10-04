@@ -25,10 +25,12 @@ var chidaFans, chidaTemps *textPanel
 
 func setChidaLayoutGrid() {
 	if chidaCPU == nil {
-		chidaCPU = &tailChart{cpuHistoryChart, func() string { return cpuGauge.Title }}
-		chidaGPU = &tailChart{gpuHistoryChart, func() string { return gpuGauge.Title }}
-		chidaBW = &tailChart{memBWHistoryChart, nil}
-		chidaMem = &tailChart{memoryHistoryChart, nil}
+		chidaCPU = &tailChart{cpuHistoryChart, func() string { return cpuGauge.Title }, nil}
+		chidaGPU = &tailChart{gpuHistoryChart, func() string { return gpuGauge.Title }, nil}
+		chidaBW = &tailChart{memBWHistoryChart, func() string {
+			return fmt.Sprintf("DRAM  R %.1f GB/s · W %.1f GB/s", lastCPUMetrics.DRAMReadBW, lastCPUMetrics.DRAMWriteBW)
+		}, []string{"R", "W"}}
+		chidaMem = &tailChart{memoryHistoryChart, nil, []string{"Usata", "Swap"}}
 		chidaFans = newTextPanel(chidaFanText)
 		chidaTemps = newTextPanel(chidaTempText)
 	}
@@ -61,7 +63,8 @@ func setChidaLayoutGrid() {
 // da sinistra, quindi senza taglio si vedrebbe la parte vecchia.
 type tailChart struct {
 	*w.StepChart
-	title func() string
+	title  func() string
+	series []string // nomi delle linee, davanti alle etichette
 }
 
 func (t *tailChart) Draw(buf *ui.Buffer) {
@@ -74,6 +77,19 @@ func (t *tailChart) Draw(buf *ui.Buffer) {
 	}
 	if t.title != nil {
 		t.Title = t.title()
+	}
+	for i, name := range t.series {
+		if i < len(t.DataLabels) && !strings.HasPrefix(t.DataLabels[i], name) {
+			t.DataLabels[i] = name + " " + t.DataLabels[i]
+		}
+	}
+	// I temi standard forzano un solo colore per tutte le linee: la seconda va distinta.
+	if len(t.series) > 1 {
+		second := ui.ColorMagenta
+		if t.BorderStyle.Fg == second {
+			second = ui.ColorYellow
+		}
+		t.LineColors = []ui.Color{t.BorderStyle.Fg, second}
 	}
 	t.StepChart.Draw(buf)
 }
