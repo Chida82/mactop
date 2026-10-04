@@ -69,6 +69,9 @@ Power | sparkline watt  2.0/8                Ventole | Temperature        0.32
 ## Build e prova
 
 - `go build -o mactop .` (Go ≥ 1.25); test: `go test ./internal/app/ ./internal/i18n/`.
+- Installazione: `./install-chida.sh` (build + `sudo install` in `/usr/local/bin/mactop`, `root:wheel` 755).
+  Script separato apposta: il `Makefile` è di upstream. Se si reinstalla mactop con Homebrew,
+  `/opt/homebrew/bin` viene prima nel PATH e nasconde questa versione.
 - Prova visiva senza toccare `~/.mactop/config.json`: config isolata con
   `XDG_CONFIG_HOME=<dir>` contenente `mactop/config.json` con `"default_layout": "chida"`,
   lanciata in un tab Herdr separato e letta con `herdr pane read <pane> --source visible --format text`.
