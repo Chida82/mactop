@@ -5,6 +5,35 @@ package app
 // Vive in questo file e si registra da solo, così i fix di upstream si prendono
 // senza conflitti.
 
+/*
+#cgo LDFLAGS: -framework CoreFoundation -framework IOKit
+#include <IOKit/IOKitLib.h>
+#include <CoreFoundation/CoreFoundation.h>
+
+// Memoria di sistema in uso dalla GPU ("In use system memory" di IOAccelerator, come ioreg).
+static long long chidaGPUMemBytes(void) {
+	io_iterator_t it;
+	if (IOServiceGetMatchingServices(kIOMainPortDefault, IOServiceMatching("IOAccelerator"), &it) != KERN_SUCCESS) return 0;
+	long long total = 0;
+	io_object_t s;
+	while ((s = IOIteratorNext(it))) {
+		CFTypeRef st = IORegistryEntryCreateCFProperty(s, CFSTR("PerformanceStatistics"), kCFAllocatorDefault, 0);
+		if (st) {
+			if (CFGetTypeID(st) == CFDictionaryGetTypeID()) {
+				CFTypeRef n = CFDictionaryGetValue(st, CFSTR("In use system memory"));
+				long long v;
+				if (n && CFGetTypeID(n) == CFNumberGetTypeID() && CFNumberGetValue(n, kCFNumberLongLongType, &v)) total += v;
+			}
+			CFRelease(st);
+		}
+		IOObjectRelease(s);
+	}
+	IOObjectRelease(it);
+	return total;
+}
+*/
+import "C"
+
 import (
 	"fmt"
 	"strings"
@@ -25,12 +54,12 @@ var chidaFans, chidaTemps *textPanel
 
 func setChidaLayoutGrid() {
 	if chidaCPU == nil {
-		chidaCPU = &tailChart{cpuHistoryChart, func() string { return cpuGauge.Title }, nil}
-		chidaGPU = &tailChart{gpuHistoryChart, func() string { return gpuGauge.Title }, nil}
+		chidaCPU = &tailChart{cpuHistoryChart, func() string { return cpuGauge.Title }, nil, nil}
+		chidaGPU = &tailChart{gpuHistoryChart, func() string { return gpuGauge.Title }, nil, nil}
 		chidaBW = &tailChart{memBWHistoryChart, func() string {
 			return fmt.Sprintf("DRAM  R %.1f GB/s · W %.1f GB/s", lastCPUMetrics.DRAMReadBW, lastCPUMetrics.DRAMWriteBW)
-		}, []string{"R", "W"}}
-		chidaMem = &tailChart{memoryHistoryChart, nil, []string{"Usata", "Swap"}}
+		}, []string{"R", "W"}, nil}
+		chidaMem = &tailChart{memoryHistoryChart, nil, []string{"Usata", "Swap", "GPU"}, addGPUMem}
 		chidaFans = newTextPanel(chidaFanText)
 		chidaTemps = newTextPanel(chidaTempText)
 	}
@@ -64,10 +93,14 @@ func setChidaLayoutGrid() {
 type tailChart struct {
 	*w.StepChart
 	title  func() string
-	series []string // nomi delle linee, davanti alle etichette
+	series []string           // nomi delle linee, davanti alle etichette
+	extra  func(*w.StepChart) // aggiunge serie nostre ai dati di upstream
 }
 
 func (t *tailChart) Draw(buf *ui.Buffer) {
+	if t.extra != nil {
+		t.extra(t.StepChart)
+	}
 	if n := t.Inner.Dx(); n > 0 {
 		for i, d := range t.Data {
 			if len(d) > n {
@@ -89,9 +122,30 @@ func (t *tailChart) Draw(buf *ui.Buffer) {
 		if t.BorderStyle.Fg == second {
 			second = ui.ColorMagenta
 		}
-		t.LineColors = []ui.Color{t.BorderStyle.Fg, second}
+		t.LineColors = []ui.Color{t.BorderStyle.Fg, second, ui.NewRGBColor(255, 175, 95)} // terza: arancione chiaro
 	}
 	t.StepChart.Draw(buf)
+}
+
+var chidaGPUHist []float64
+
+// addGPUMem aggiunge la memoria GPU come terza linea, senza sottrarla a nulla.
+// Upstream riscrive Data con 2 serie a ogni campione: 2 serie = campione nuovo da completare.
+func addGPUMem(sc *w.StepChart) {
+	if len(sc.Data) != 2 {
+		return
+	}
+	gb := float64(C.chidaGPUMemBytes()) / 1024 / 1024 / 1024
+	// Stessa lunghezza della storia di upstream, con zeri a sinistra: le linee restano allineate a destra.
+	n := len(memoryUsedHistory)
+	h := append(chidaGPUHist, gb)
+	if len(h) < n {
+		h = append(make([]float64, n-len(h)), h...)
+	}
+	chidaGPUHist = h[len(h)-n:]
+	sc.Data = append(sc.Data, chidaGPUHist)
+	sc.DataLabels = append(sc.DataLabels, fmt.Sprintf("%.1fGB", gb))
+	sc.Title += fmt.Sprintf(", GPU: %.1fGB", gb)
 }
 
 // textPanel rigenera titolo e testo a ogni disegno, con lo stile del pannello rete (tema).

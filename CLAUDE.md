@@ -44,16 +44,18 @@ colonna sinistra 40%                         colonna destra 60%
 CPU   grafico storico   1.25/8               Processi                     0.68
 GPU   grafico storico   1.25/8
 DRAM  lettura/scrittura 1.0/8
-MEM   usata + swap      1.5/8
+MEM   usata+swap+GPU    1.5/8
 Network & Disk          1.0/8
 Power | sparkline watt  2.0/8                Ventole | Temperature        0.32
 ```
 
 - **CPU/GPU**: `cpuHistoryChart`/`gpuHistoryChart` con il titolo preso da `cpuGauge.Title`/`gpuGauge.Title`
   (uso, frequenza, temperatura), così bastano poche righe.
-- **DRAM**: `memBWHistoryChart` (al posto di ANE), titolo con R e W. **MEM**: `memoryHistoryChart` (due linee, usata e swap, come L10).
+- **DRAM**: `memBWHistoryChart` (al posto di ANE), titolo con R e W. **MEM**: `memoryHistoryChart` (usata e swap, come L10) più una terza linea **GPU**: memoria di sistema in uso dalla GPU
+  (`In use system memory` di `IOAccelerator`, letta via IOKit in cgo, come `ioreg`), anche nel titolo. Non si sottrae a nulla:
+  è memoria wired che il driver tiene per i processi GPU (pesi dei modelli) e che nessuna colonna per-processo mostra.
 - Grafici a due linee: i temi standard forzano un colore unico (`styleStepChart`), quindi `tailChart` colora la
-  seconda linea in giallo, come temperature/ventole in salita (magenta se il tema è giallo) e mette il nome della serie davanti all'etichetta (`R`/`W`, `Usata`/`Swap`).
+  seconda linea in giallo, come temperature/ventole in salita (magenta se il tema è giallo) e mette il nome della serie davanti all'etichetta (`R`/`W`, `Usata`/`Swap`/`GPU`); la terza linea è arancione chiaro (`#ffaf5f`).
 - **Consumi**: `PowerChart` + `sparklineGroup` spostati in basso a sinistra.
 - **Ventole**: contenuto di `buildFanStatusText` (come il layout fan); titolo con lo stato fanboost
   (`Mode == 1` → "BOOST (manuale)", altrimenti "AUTO (curva Apple)").
@@ -65,6 +67,8 @@ Power | sparkline watt  2.0/8                Ventole | Temperature        0.32
 
 - `tailChart`: StepChart disegna da sinistra e gli update upstream tagliano la storia sulla larghezza
   dei loro layout; il wrapper tiene solo gli ultimi `Inner.Dx()` punti, altrimenti si vedrebbe la parte vecchia.
+- `addGPUMem` (hook `extra` di `tailChart`): upstream riscrive `Data` con 2 serie a ogni campione, quindi
+  "2 serie" = campione nuovo: si legge la GPU una volta, si aggiunge alla storia, all'etichetta e al titolo.
 - `textPanel`: rigenera titolo e testo a ogni Draw, con lo stile del pannello rete (segue il tema).
 - Fan e sensori sono campionati sempre da upstream (`lastCPUMetrics.Fans`, `.TempSensors`), anche fuori dal layout fan.
 
